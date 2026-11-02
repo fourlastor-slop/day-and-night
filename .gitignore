@@ -1,0 +1,9 @@
+# Godot's import cache and editor state
+.godot/
+
+# Exported builds
+/build/
+
+# The Python environment for the generators in tools/
+/.venv/
+__pycache__/
