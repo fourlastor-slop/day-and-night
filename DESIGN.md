@@ -40,7 +40,8 @@ There is no mouse or pen. Each player has a gamepad or a side of the keyboard, s
 gamepads work best. One gamepad plus the keyboard also works, and both on one keyboard is the fallback, though it's
 cramped and cheap keyboards can drop keys when several are held.
 
-Both use the same idea: whatever you're about to act on lights up.
+Both use the same idea: whatever you're about to act on lights up, with the key or button for it beside it. Key cues
+only say how to act on what's already in reach, never what to try, and walking and jumping don't get one.
 
 ### Day, night and caves
 
@@ -121,7 +122,12 @@ A simplified Terraria, tuned to be easy to pick up.
   stone 5 and iron 9. A pillar down to the ground resets the count.
 - **The house is heavy.** Blocks never fall on their own, and a stretched bridge still holds the kids. Driving onto it
   adds load: if it can't hold, it breaks, the house rolls back to safety, and he rebuilds.
-- **White objects are supports.** A white rock pressing up under a bridge holds it up.
+- **The house keeps its footing.** What its wheels rest on can't be dug or knocked out, and neither can the spot it
+  rolls back to, because a house in a hole would have no way back up.
+- **The house says when it can't go.** It shudders, and a crossed wheel appears on whatever stopped it. That shows the
+  problem, not the fix.
+- **White objects are supports.** A white rock pressing up under a bridge holds it up. Repainted blue there, it freezes
+  into the surface and keeps holding.
 - **Water has a current.** It carries away anything placed in it except stone. So wood can stand on a rock that
   breaks the surface but not on one under it, and that choice decides whether a river needs Marta.
 - **Iron needs a furnace.** He finds ore, sets it beside a stone she painted red, and iron is his for good.

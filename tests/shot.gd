@@ -22,6 +22,8 @@ func _ready() -> void:
 	bot.run(40)
 	await shot("3-rock-floats")
 	bot.run(80)
+	bot.drive()
+	await shot("3b-refused", 20)
 	for x in range(28, 42):
 		bot.walk(sim.giulio, x - 0.5)
 		sim.giulio.facing = 1
@@ -29,6 +31,10 @@ func _ready() -> void:
 		bot.press(sim.giulio, "use_p")
 		if x == 34:
 			await shot("4-building")
+			sim.giulio.pad.alt = true
+			bot.run(2)
+			await shot("4b-aiming")
+			sim.giulio.pad.clear()
 	await shot("5-all-red")
 	bot.drive()
 	await shot("6-it-broke")
@@ -63,9 +69,9 @@ func settle() -> void:
 		await get_tree().process_frame
 
 
-func shot(name_: String) -> void:
+func shot(name_: String, frames := Stage.FX_LIFE + 2) -> void:
 	# The bots skip frames, so let anything still falling finish before the picture.
-	for i in Stage.FX_LIFE + 2:
+	for i in frames:
 		game.stage.sync()
 	game.refresh()
 	await settle()

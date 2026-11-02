@@ -9,6 +9,13 @@ const DAY := 2
 const NIGHT_TOP := 4
 const EVERY := SHARED | DAY | NIGHT_TOP
 const FX_LIFE := 90
+const STOP_LIFE := 150
+const SHUDDER := 30
+const USE_HOLD := 10
+
+## The keys on keys.png, in order.
+const CAPS: Array[String] = ["E", "R", "Q", "F", "K", "L", "J", "I", "X", "B", "LB", "Y"]
+const CAP_CELL := 64.0
 
 const STRESS_CELL := Vector2(48, 16)
 const BLOCK_CELL := 64.0
@@ -63,6 +70,15 @@ class Frost extends Node2D:
 				draw_texture(ice, Vector2(x * B - 8, Sim.SURFACE * B - 8))
 
 
+## One kid's cues, on that kid's half of the screen only, because their keys are different.
+class Cues:
+	var drive: Sprite2D
+	var bell: Sprite2D
+	var interact: Sprite2D
+	var use: Sprite2D
+	var alt: Sprite2D
+
+
 var sim: Sim
 var ground: Ground
 var frost: Frost
@@ -77,8 +93,14 @@ var marta_glow: Sprite2D
 var giulio_glow: Sprite2D
 var ring: Sprite2D
 var target: Sprite2D
-var hint_drive: Sprite2D
-var hint_bell: Sprite2D
+var aim: Sprite2D
+var stop: Sprite2D
+var stop_left := 0
+var use_hold := 0
+var marta_cues: Cues
+var giulio_cues: Cues
+var marta_keys := {}
+var giulio_keys := {}
 var fx: Array[Dictionary] = []
 var seen := -1
 
@@ -121,8 +143,11 @@ func _init(world: Sim) -> void:
 	giulio.offset = Vector2(-56, -104)
 	ring = _sprite("res://assets/gfx/ring.png", 8, DAY)
 	target = _sprite("res://assets/gfx/target.png", 8, NIGHT_TOP)
-	hint_drive = _sprite("res://assets/gfx/hint_drive.png", 8)
-	hint_bell = _sprite("res://assets/gfx/hint_bell.png", 8)
+	aim = _sprite("res://assets/gfx/aim_arrows.png", 8, NIGHT_TOP)
+	stop = _sprite("res://assets/gfx/hint_stop.png", 9, DAY | NIGHT_TOP)
+	stop.visible = false
+	marta_cues = _cues(DAY)
+	giulio_cues = _cues(NIGHT_TOP)
 
 
 func _sprite(path: String, z: int, layer := SHARED) -> Sprite2D:
@@ -132,6 +157,32 @@ func _sprite(path: String, z: int, layer := SHARED) -> Sprite2D:
 	s.visibility_layer = layer
 	add_child(s)
 	return s
+
+
+func _cues(layer: int) -> Cues:
+	var c := Cues.new()
+	c.drive = _sprite("res://assets/gfx/hint_drive.png", 8, layer)
+	c.bell = _sprite("res://assets/gfx/hint_bell.png", 8, layer)
+	c.interact = _key(layer)
+	c.use = _key(layer)
+	c.alt = _key(layer)
+	return c
+
+
+func _key(layer: int) -> Sprite2D:
+	var s := _sprite("res://assets/gfx/keys.png", 9, layer)
+	s.region_enabled = true
+	return s
+
+
+static func cap_rect(key: String) -> Rect2:
+	return Rect2(CAPS.find(key) * CAP_CELL, 0, CAP_CELL, CAP_CELL)
+
+
+func _cue(s: Sprite2D, on: bool, key: String, at: Vector2) -> void:
+	s.visible = on
+	s.region_rect = cap_rect(key)
+	s.position = at
 
 
 func sync() -> void:
@@ -160,22 +211,32 @@ func sync() -> void:
 		_event(e)
 	sim.events.clear()
 	_tick_fx()
+	_tick_stop()
 
 
 func _sync_house() -> void:
 	var at := sim.house_x * B
 	var bump := sin(sim.t * 0.5) * 1.5 if sim.house_state != Sim.PARKED else 0.0
-	house.position = Vector2(at - 60, Sim.ROAD * B - 520 + bump)
-	window.position = Vector2(at + 2.9 * B, (Sim.ROAD - 3.55) * B + bump)
+	var shake := sin(stop_left * 1.3) * maxi(stop_left - STOP_LIFE + SHUDDER, 0) * 0.3
+	house.position = Vector2(at - 60 + shake, Sim.ROAD * B - 520 + bump)
+	window.position = Vector2(at + 2.9 * B + shake, (Sim.ROAD - 3.55) * B + bump)
 	for i in wheels.size():
-		wheels[i].position = Vector2(at + Sim.WHEELS[i] * B, (Sim.ROAD - 1.02) * B)
+		wheels[i].position = Vector2(at + Sim.WHEELS[i] * B + shake, (Sim.ROAD - 1.02) * B)
 		wheels[i].rotation = sim.house_x / 1.02
-	var near_house := sim.near_house(sim.marta) or sim.near_house(sim.giulio)
-	var near_bell := sim.near_bell(sim.marta) or sim.near_bell(sim.giulio)
-	hint_bell.visible = near_bell and not sim.done
-	hint_drive.visible = near_house and not near_bell and sim.house_state == Sim.PARKED and not sim.done
-	hint_drive.position = Vector2(at + 5.9 * B, (Sim.ROAD - 6.2) * B)
-	hint_bell.position = Vector2(at + Sim.BELL * B, (Sim.ROAD - 5.6) * B)
+	_sync_hints(marta_cues, sim.marta, marta_keys)
+	_sync_hints(giulio_cues, sim.giulio, giulio_keys)
+
+
+func _sync_hints(c: Cues, k: Sim.Kid, keys: Dictionary) -> void:
+	var at := sim.house_x * B
+	var bell := sim.near_bell(k) and not sim.done
+	var drive := sim.near_house(k) and not bell and sim.house_state == Sim.PARKED and not sim.done
+	c.bell.visible = bell
+	c.drive.visible = drive
+	c.drive.position = Vector2(at + 5.9 * B, (Sim.ROAD - 6.2) * B)
+	c.bell.position = Vector2(at + Sim.BELL * B, (Sim.ROAD - 5.6) * B)
+	var bubble := c.bell if bell else c.drive
+	_cue(c.interact, bell or drive, keys.interact, bubble.position + Vector2(66, 0))
 
 
 func _sync_kid(s: Sprite2D, k: Sim.Kid) -> void:
@@ -189,17 +250,28 @@ func _sync_kid(s: Sprite2D, k: Sim.Kid) -> void:
 func _sync_pick() -> void:
 	var m := sim.marta
 	ring.visible = m.pick_rock != null or m.pick_block.x >= 0
+	var colour := Sim.PLAIN
 	if m.pick_rock != null:
 		ring.position = m.pick_rock.rect().get_center() * B
 		ring.scale = Vector2.ONE * 0.72
+		colour = m.pick_rock.colour
 	elif m.pick_block.x >= 0:
 		ring.position = (Vector2(m.pick_block) + Vector2(0.5, 0.5)) * B
 		ring.scale = Vector2.ONE * 0.46
+		colour = sim.paint.get(m.pick_block.y * Sim.W + m.pick_block.x, Sim.PLAIN)
 	ring.rotation += 0.01
+	var corner := ring.scale * 70.0
+	_cue(marta_cues.use, ring.visible and colour != m.colour, marta_keys.use, ring.position + corner * Vector2(1, -1))
+	_cue(marta_cues.alt, ring.visible and colour != Sim.PLAIN, marta_keys.alt, ring.position + corner * Vector2(-1, -1))
 	var c := sim.giulio.target
-	target.visible = c.x >= 0
+	target.visible = c.x >= 0 and not sim.bearing(c)
 	target.position = (Vector2(c) + Vector2(0.5, 0.5)) * B
 	target.scale = Vector2.ONE * 0.9
+	aim.visible = target.visible and sim.giulio.pad.alt
+	aim.position = target.position
+	# Walking, he overlaps the square ahead for part of every step, so the cue outlasts that.
+	use_hold = USE_HOLD if sim.can_use() else maxi(use_hold - 1, 0)
+	_cue(giulio_cues.use, target.visible and use_hold > 0, giulio_keys.use, target.position + Vector2(sim.giulio.facing * 48, -48))
 
 
 func _event(e: Dictionary) -> void:
@@ -213,6 +285,17 @@ func _event(e: Dictionary) -> void:
 			s.position = e.at * B
 			s.modulate = Color(1, 1, 0.8, 0.8)
 			fx.append({"node": s, "t": 0, "grow": true})
+		"refuse":
+			stop.position = e.at * B
+			stop_left = STOP_LIFE
+
+
+## The crossed wheel sits on whatever stopped the house, and goes once it moves again.
+func _tick_stop() -> void:
+	stop_left = 0 if sim.house_state != Sim.PARKED else maxi(stop_left - 1, 0)
+	stop.visible = stop_left > 0
+	stop.scale = Vector2.ONE * (1.0 + sin(stop_left * 0.25) * 0.1)
+	stop.modulate.a = minf(stop_left / 20.0, 1.0)
 
 
 func _debris(at: Vector2, vel: Vector2, gravity: float) -> void:

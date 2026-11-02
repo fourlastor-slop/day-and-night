@@ -14,6 +14,7 @@ from paint import (BLUE, GREEN, GRASS, ORANGE, P, RED, STONE, U, WHITE, WOOD, WO
 
 OUT = os.path.join(os.path.dirname(__file__), '..', 'assets', 'gfx')
 EARTH = ('#b39877', '#a98f70', '#9e866a', '#937c63', '#88725b')
+INK = '#3d332c'
 
 
 def cutout(W, H, draw):
@@ -207,6 +208,68 @@ def hint_bell(p):
     p.dot(40, 57, 5, '#8d7433')
 
 
+def hint_stop(p):
+    bubble(p)
+    wheel(p, 40, 40, 22)
+    for a, b in (((17, 17), (63, 63)), ((63, 17), (17, 63))):
+        p.line([a, b], RED, w=6.5, a=1, amp=.5, grain=False, painted=True)
+
+
+# Strokes in a box from (0, 0) to (1, 1). The order of CAPS has to match the one in stage.gd.
+CAPS = ('E', 'R', 'Q', 'F', 'K', 'L', 'J', 'I', 'X', 'B', 'LB', 'Y')
+ROUND = ('X', 'B', 'Y')
+LETTERS = {
+    'E': [[(.9, 0), (0, 0), (0, 1), (.9, 1)], [(0, .5), (.7, .5)]],
+    'R': [[(0, 1), (0, 0), (.55, 0), (.85, .12), (.85, .38), (.55, .5), (0, .5)], [(.42, .5), (.95, 1)]],
+    'Q': [[(.5 + .5 * math.cos(a), .5 + .5 * math.sin(a)) for a in np.linspace(0, 6.3, 16)], [(.56, .66), (1, 1.06)]],
+    'F': [[(.9, 0), (0, 0), (0, 1)], [(0, .5), (.7, .5)]],
+    'K': [[(0, 0), (0, 1)], [(.85, 0), (0, .58)], [(.3, .38), (.92, 1)]],
+    'L': [[(.05, 0), (.05, 1), (.85, 1)]],
+    'J': [[(.8, 0), (.8, .72), (.68, .92), (.45, 1), (.22, .92), (.1, .72)]],
+    'I': [[(.5, 0), (.5, 1)], [(.2, 0), (.8, 0)], [(.2, 1), (.8, 1)]],
+    'X': [[(0, 0), (1, 1)], [(1, 0), (0, 1)]],
+    'B': [[(0, 0), (0, 1), (.6, 1), (.9, .86), (.9, .62), (.6, .5), (0, .5)], [(0, 0), (.55, 0), (.82, .12), (.82, .36), (.6, .5)]],
+    'Y': [[(0, 0), (.5, .5), (1, 0)], [(.5, .5), (.5, 1)]],
+}
+
+
+def letter(p, name, x, y, w, h):
+    for stroke in LETTERS[name]:
+        p.line([(x + a * w, y + b * h) for a, b in stroke], INK, w=3.4, a=1, amp=.25, grain=False, painted=True, step=5)
+
+
+def keys_sheet(p):
+    for k, name in enumerate(CAPS):
+        px = k * 64
+        if name in ROUND:
+            face = ell(px + 32, 30, 25, 25, 26)
+            edge = ell(px + 32, 34, 25, 25, 26)
+        else:
+            face = rbox(px + 6, 5, px + 58, 53, 10)
+            edge = rbox(px + 6, 9, px + 58, 59, 10)
+        p.shape(edge, '#a99a82', line=.5, lw=1.4, shadow=.25, rim=0, amp=.5, painted=True, step=7)
+        p.shape(face, '#f3ecdd', line=.45, lw=1.3, shadow=0, rim=.2, amp=.5, painted=True, step=7, hatch=1)
+        if name == 'LB':
+            letter(p, 'L', px + 13, 17, 15, 24)
+            letter(p, 'B', px + 33, 17, 17, 24)
+        else:
+            letter(p, name, px + 21, 16, 22, 28)
+
+
+def strip_aim(p):
+    p.shape(rbox(10, 8, 94, 92, 12), '#e5e0d4', line=.5, shadow=.3, rim=.2, painted=True, hatch=2)
+    p.dashes(np.array([(30.0, 28.0), (74.0, 28.0), (74.0, 72.0), (30.0, 72.0)]), '#7f8892', w=3.6, dash=10, gap=7)
+
+
+def aim_arrows(p):
+    c = 70
+    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        tip = (c + dx * 66, c + dy * 66)
+        a = (c + dx * 48 - dy * 13, c + dy * 48 + dx * 13)
+        b = (c + dx * 48 + dy * 13, c + dy * 48 - dx * 13)
+        p.shape(np.array([tip, a, b], np.float64), '#fff3d0', line=.6, lw=1.4, shadow=.2, rim=0, amp=.4, painted=True, step=6)
+
+
 def banner(p):
     p.shape(rbox(16, 14, 404, 266, 14), '#f3ecdd', line=.6, shadow=.4, rim=.2, painted=True, hatch=1)
     house(p, 1.95, 5.15, u=22, wheels=True)
@@ -246,6 +309,10 @@ def main():
     write('moon', cutout(120, 120, lambda p: disc(p, '#31427c')))
     write('hint_drive', cutout(80, 80, hint_drive))
     write('hint_bell', cutout(80, 80, hint_bell))
+    write('hint_stop', cutout(80, 80, hint_stop))
+    write('keys', cutout(64 * len(CAPS), 64, keys_sheet))
+    write('strip_aim', cutout(104, 100, strip_aim))
+    write('aim_arrows', cutout(140, 140, aim_arrows))
     write('banner', cutout(420, 280, banner))
 
 

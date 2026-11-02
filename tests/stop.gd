@@ -28,7 +28,15 @@ func _ready() -> void:
 	a_rock_wont_squash_its_rider()
 	ice_forming_around_you_wakes_you()
 	digging_stops_at_the_edge_of_the_world()
-	mashing_buttons_never_buries_a_kid()
+	the_house_keeps_the_ground_under_it()
+	the_house_keeps_the_planks_under_it()
+	the_house_keeps_the_spot_it_rolls_back_to()
+	a_raised_rock_frozen_in_still_holds()
+	a_dug_road_can_be_filled_in()
+	a_refusal_shows_what_stopped_the_house()
+	the_tool_cue_only_shows_when_it_can_act()
+	the_cues_name_the_right_keys()
+	mashing_buttons_breaks_nothing()
 	print("stop: ", "FAILED %d" % failed if failed > 0 else "ok")
 	get_tree().quit(1 if failed > 0 else 0)
 
@@ -298,7 +306,141 @@ func digging_stops_at_the_edge_of_the_world() -> void:
 	check(sim.cell(0, Sim.ROAD) == Sim.EARTH, "digging past the edge leaves the far side of the world alone")
 
 
-func mashing_buttons_never_buries_a_kid() -> void:
+## The house can't climb out of a hole, so what its wheels stand on stays. He can dig everywhere else.
+func the_house_keeps_the_ground_under_it() -> void:
+	fresh()
+	var k := sim.giulio
+	bot.press(k, "next_p")
+	for w in Sim.WHEELS:
+		var x := floori(sim.house_x + w)
+		bot.walk(k, x + 0.5)
+		bot.press(k, "use_p")
+		check(sim.cell(x, Sim.ROAD) == Sim.EARTH, "the pick leaves the ground under a wheel")
+	var between := floori(sim.house_x + 4.5)
+	bot.walk(k, between + 0.5)
+	bot.press(k, "use_p")
+	check(sim.cell(between, Sim.ROAD) == Sim.AIR, "and can still dig between the wheels")
+
+
+func the_house_keeps_the_planks_under_it() -> void:
+	park_on_the_deck()
+	var k := sim.giulio
+	var x := floori(sim.house_x + Sim.WHEELS[0])
+	bot.walk(k, x + 0.5)
+	check(bot.aim(Vector2i(x, Sim.ROAD)), "he can aim at the plank under a wheel")
+	bot.press(k, "use_p")
+	k.pad.clear()
+	check(sim.cell(x, Sim.ROAD) == Sim.BLOCK, "the hammer leaves the plank under a wheel")
+
+
+## A broken bridge sends the house back, so the ground waiting for it has to be there too.
+func the_house_keeps_the_spot_it_rolls_back_to() -> void:
+	park_on_the_deck()
+	var k := sim.giulio
+	bot.press(k, "next_p")
+	for w in Sim.WHEELS:
+		var x := floori(sim.house_safe + w)
+		bot.walk(k, x + 0.5)
+		bot.press(k, "use_p")
+		check(sim.cell(x, Sim.ROAD) == Sim.EARTH, "the pick leaves the ground the house would roll back to")
+	bot.walk(sim.marta, 31.0)
+	sim.marta.facing = 1
+	bot.run(2)
+	bot.press(sim.marta, "alt_p")
+	bot.run(90)
+	check(sim.rocks[0].pos.y > 11.5, "she washes the rock and it sinks")
+	plank(34, Sim.ROAD)
+	bot.walk(k, sim.house_x + 3.0)
+	bot.press(k, "interact_p")
+	bot.run(600)
+	check(sim.house_x == sim.house_safe, "with the rock washed off, the next plank breaks and the house rolls back")
+	check(wheels_stand(), "and it lands on the ground")
+
+
+## Nobody planned this way across, but it's physics: the ice closes around a raised rock and keeps it up.
+func a_raised_rock_frozen_in_still_holds() -> void:
+	fresh()
+	bot.clear_road()
+	bot.drive()
+	bot.build_deck(28, 41)
+	bot.paint_rock_from(31.0, 0)
+	bot.run(90)
+	bot.paint_rock_from(36.0, 1)
+	bot.run(90)
+	bot.press(sim.marta, "next_p")
+	check(bot.paint_rock_from(31.0, 0), "she picks the first rock again")
+	check(bot.paint_rock_from(36.0, 1), "she picks the second rock again")
+	bot.run(240)
+	check(sim.rocks[0].colour == Sim.BLUE and sim.rocks[1].colour == Sim.BLUE, "she repaints both blue")
+	check(max_span() < Sim.MAX_SPAN, "the ice keeps them under the deck")
+	bot.drive()
+	check(sim.done, "and the house crosses")
+
+
+## A trench in the road only stops the house until he fills it in.
+func a_dug_road_can_be_filled_in() -> void:
+	fresh()
+	bot.clear_road()
+	for x in range(24, 28):
+		sim.cells[Sim.ROAD * Sim.W + x] = Sim.AIR
+	sim._dirty = true
+	bot.drive()
+	check(sim.house_x + Sim.WHEELS[1] < 24.0, "a trench stops the house")
+	check(wheels_stand(), "with its wheels still on the road")
+	check(bot.build_deck(24, 41), "he fills it in and carries on across the river")
+	bot.paint_rock_from(31.0, 0)
+	bot.run(90)
+	bot.paint_rock_from(36.0, 1)
+	bot.run(90)
+	bot.drive()
+	check(sim.done, "and the house crosses")
+
+
+func a_refusal_shows_what_stopped_the_house() -> void:
+	fresh()
+	bot.drive()
+	check(refused_at() == sim.rocks[2].rect().get_center(), "the cue lands on a rock in the way")
+	bot.clear_road()
+	bot.run(240)
+	plank(25, Sim.ROAD - 1)
+	bot.drive()
+	check(refused_at() == Vector2(25.5, Sim.ROAD - 0.5), "and on a plank in the way")
+	sim.cells[(Sim.ROAD - 1) * Sim.W + 25] = Sim.AIR
+	bot.drive()
+	check(refused_at() == Vector2(Sim.BANK_L + 0.5, Sim.ROAD + 0.5), "and on the gap at the river")
+
+
+func the_tool_cue_only_shows_when_it_can_act() -> void:
+	fresh()
+	var k := sim.giulio
+	bot.run(2)
+	check(sim.can_use(), "the hammer can lay a plank on the ground ahead")
+	bot.walk(k, sim.house_x + Sim.WHEELS[0])
+	bot.press(k, "next_p")
+	bot.run(2)
+	check(not sim.can_use(), "the pick can't dig under a wheel")
+	k.pos.x += 3.0
+	bot.run(2)
+	check(sim.can_use(), "but it can dig next to one")
+	bot.press(k, "next_p")
+	bot.aim(k.target + Vector2i(0, -3))
+	check(not sim.can_use(), "and the hammer can't lay a plank in thin air")
+	k.pad.clear()
+
+
+func the_cues_name_the_right_keys() -> void:
+	var marta := Main.caps(Main.KEYS_MARTA, -1)
+	check(marta == {"use": "E", "alt": "R", "next": "Q", "interact": "F"}, "Marta's cues show her keys")
+	var giulio := Main.caps(Main.KEYS_GIULIO, -1)
+	check(giulio == {"use": "K", "alt": "L", "next": "J", "interact": "I"}, "Giulio's cues show his keys")
+	var pad := Main.caps(Main.KEYS_GIULIO, 0)
+	check(pad == {"use": "X", "alt": "B", "next": "LB", "interact": "Y"}, "a gamepad's cues show its buttons")
+	for names: Dictionary in [marta, giulio, pad]:
+		for action: String in names:
+			check(Stage.CAPS.has(names[action]), "the sheet has a key for %s" % names[action])
+
+
+func mashing_buttons_breaks_nothing() -> void:
 	for s in 8:
 		fresh()
 		if s % 2 == 1:
@@ -307,6 +449,7 @@ func mashing_buttons_never_buries_a_kid() -> void:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = s
 		var buried := 0
+		var hanging := 0
 		for i in MASH_TICKS:
 			bot.mash(sim.marta, rng)
 			bot.mash(sim.giulio, rng)
@@ -314,7 +457,37 @@ func mashing_buttons_never_buries_a_kid() -> void:
 			for k: Sim.Kid in [sim.marta, sim.giulio]:
 				if sim._tiles_hit(k.rect().grow(-0.05)):
 					buried += 1
+			if sim.house_state == Sim.PARKED and not wheels_stand():
+				hanging += 1
 		check(buried == 0, "mashing never leaves a kid inside a block (seed %d: %d ticks)" % [s, buried])
+		check(hanging == 0, "mashing never leaves the house hanging (seed %d: %d ticks)" % [s, hanging])
+
+
+## Parks the house on planks held up by one white rock, with the end of the deck stopping it.
+func park_on_the_deck() -> void:
+	fresh()
+	bot.clear_road()
+	bot.drive()
+	bot.build_deck(28, 33)
+	check(bot.paint_rock_from(31.0, 0), "she picks the first rock")
+	bot.run(90)
+	bot.drive()
+	check(sim.house_x + Sim.WHEELS[0] > Sim.BANK_L, "the house parks on the planks")
+
+
+func refused_at() -> Vector2:
+	for i in range(sim.events.size() - 1, -1, -1):
+		if sim.events[i].kind == "refuse":
+			return sim.events[i].get("at", Vector2(-1, -1))
+	return Vector2(-1, -1)
+
+
+func wheels_stand() -> bool:
+	for w in Sim.WHEELS:
+		var c := sim.cell(floori(sim.house_x + w), Sim.ROAD)
+		if c != Sim.EARTH and c != Sim.BLOCK:
+			return false
+	return true
 
 
 func drop_in_river(k: Sim.Kid) -> void:

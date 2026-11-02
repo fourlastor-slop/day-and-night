@@ -41,6 +41,7 @@ const SKY := -4.0
 const HOUSE_W := 9.0
 const HOUSE_H := 8.0
 const WHEELS: Array[float] = [2.2, 6.8]
+const TREAD := 0.6
 const HOUSE_SPEED := 3.0
 const BELL := 1.1
 const GOAL := 46.0
@@ -182,6 +183,15 @@ func _tiles_hit(r: Rect2) -> bool:
 			if solid(x, y):
 				return true
 	return false
+
+
+## The middle of the first solid square in a rectangle that has one.
+func _first_tile(r: Rect2) -> Vector2:
+	for y in range(floori(r.position.y), ceili(r.end.y)):
+		for x in range(floori(r.position.x), ceili(r.end.x)):
+			if solid(x, y):
+				return Vector2(x + 0.5, y + 0.5)
+	return r.get_center()
 
 
 func _rock_hit(r: Rect2, skip: Rect2, not_this: Rock = null) -> Rock:
@@ -428,24 +438,32 @@ func _use_tool() -> void:
 	var k := giulio
 	if k.pad.next_p:
 		k.tool = PICK if k.tool == HAMMER else HAMMER
+	if not k.pad.use_p or not can_use():
+		return
 	var c := k.target
-	if not k.pad.use_p or c.x < 0 or c.x >= W or c.y < 0 or c.y >= H:
-		return
 	var what := cell(c.x, c.y)
-	if k.tool == PICK:
-		if what == EARTH:
-			cells[_i(c.x, c.y)] = AIR
-			_dirty = true
-		return
-	if what == BLOCK:
+	if what == AIR:
+		cells[_i(c.x, c.y)] = BLOCK
+		_dirty = true
+	elif what == WATER:
+		events.append({"kind": "swept", "cell": c})
+	else:
 		cells[_i(c.x, c.y)] = AIR
 		paint.erase(_i(c.x, c.y))
 		_dirty = true
-	elif what == WATER and not frozen(c.x, c.y):
-		events.append({"kind": "swept", "cell": c})
-	elif what == AIR and _touches(c) and not _occupied(c):
-		cells[_i(c.x, c.y)] = BLOCK
-		_dirty = true
+
+
+## Whether his tool would do anything at the square he's aiming at.
+func can_use() -> bool:
+	var c := giulio.target
+	if c.x < 0 or c.x >= W or c.y < 0 or c.y >= H or bearing(c):
+		return false
+	var what := cell(c.x, c.y)
+	if giulio.tool == PICK:
+		return what == EARTH
+	if what == AIR:
+		return _touches(c) and not _occupied(c)
+	return what == BLOCK or (what == WATER and not frozen(c.x, c.y))
 
 
 func _touches(c: Vector2i) -> bool:
@@ -525,6 +543,18 @@ func near_bell(k: Kid) -> bool:
 	return absf(k.pos.x - (house_x + BELL)) < 1.2
 
 
+## What the wheels rest on, here and where the house would roll back to. It stays put, because a house
+## with nothing under it has no way back up.
+func bearing(c: Vector2i) -> bool:
+	if c.y != ROAD:
+		return false
+	for at: float in [house_x, house_safe]:
+		for w in WHEELS:
+			if c.x < at + w + TREAD and c.x + 1 > at + w - TREAD:
+				return true
+	return false
+
+
 ## The bell puts loose rocks back, so nothing can be lost for good. One holding up a plank is doing
 ## its job and stays, and so does one whose place the house has reached.
 func _ring() -> void:
@@ -554,19 +584,23 @@ func _tick_house() -> void:
 	elif house_state == DRIVING:
 		var next := house_x + HOUSE_SPEED * DT
 		var body := Rect2(next + 0.1, ROAD - HOUSE_H, HOUSE_W - 0.2, HOUSE_H - 0.1)
-		if _tiles_hit(body) or _rock_hit(body, Rect2()) != null:
-			_refuse()
+		var rock := _rock_hit(body, Rect2())
+		if rock != null:
+			_refuse(rock.rect().get_center())
+			return
+		if _tiles_hit(body):
+			_refuse(_first_tile(body))
 			return
 		var ground := true
 		for w in WHEELS:
-			var x := floori(next + w + 0.6)
+			var x := floori(next + w + TREAD)
 			var c := cell(x, ROAD)
 			if c == BLOCK and span_at(x, ROAD) >= MAX_SPAN:
 				_collapse(Vector2i(x, ROAD))
 				house_state = BACKING
 				return
 			if c != BLOCK and c != EARTH:
-				_refuse()
+				_refuse(Vector2(x + 0.5, ROAD + 0.5))
 				return
 			ground = ground and c == EARTH
 		house_x = next
@@ -577,9 +611,9 @@ func _tick_house() -> void:
 			done = true
 
 
-func _refuse() -> void:
+func _refuse(at: Vector2) -> void:
 	house_state = PARKED
-	events.append({"kind": "refuse"})
+	events.append({"kind": "refuse", "at": at})
 
 
 ## Too much load: every overstretched block joined to this one goes at once.

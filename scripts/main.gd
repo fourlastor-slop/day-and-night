@@ -9,6 +9,9 @@ const ZOOM := 0.75
 const PARALLAX := 0.5
 const JOIN_Y := 530
 const STRIP_AT := Vector2(14, 12)
+const STRIP_KEY := Vector2(180, 18)
+const AIM_AT := Vector2(252, 0)
+const AIM_KEY := Vector2(84, 18)
 const SWATCH_X: Array[float] = [16.0, 96.0]
 const FAR := 62.0
 const NEAR := 10.0
@@ -21,6 +24,7 @@ const KEYS_GIULIO := {
 	"left": KEY_LEFT, "right": KEY_RIGHT, "up": KEY_UP, "down": KEY_DOWN, "jump": KEY_UP,
 	"use": KEY_K, "alt": KEY_L, "next": KEY_J, "interact": KEY_I,
 }
+const BUTTONS := {"use": "X", "alt": "B", "next": "LB", "interact": "Y"}
 
 ## Set by the tests, which drive the sim themselves.
 var manual := false
@@ -34,6 +38,9 @@ var night_sky: TextureRect
 var world_view: SubViewport
 var colour_ring: TextureRect
 var tool_ring: TextureRect
+var colour_key: TextureRect
+var tool_key: TextureRect
+var aim_key: TextureRect
 var sun: TextureRect
 var moon: TextureRect
 var banner: TextureRect
@@ -106,11 +113,24 @@ func _image(path: String, parent: Control, at: Vector2) -> TextureRect:
 	return r
 
 
+func _key(at: Vector2) -> TextureRect:
+	var r := _image("res://assets/gfx/keys.png", self, at)
+	var key := AtlasTexture.new()
+	key.atlas = r.texture
+	r.texture = key
+	return r
+
+
 func _hud() -> void:
+	var tools_at := STRIP_AT + Vector2(0, HALF.y + 18)
 	_image("res://assets/gfx/strip_colours.png", self, STRIP_AT)
 	colour_ring = _image("res://assets/gfx/selected.png", self, Vector2.ZERO)
-	_image("res://assets/gfx/strip_tools.png", self, STRIP_AT + Vector2(0, HALF.y + 18))
+	colour_key = _key(STRIP_AT + STRIP_KEY)
+	_image("res://assets/gfx/strip_tools.png", self, tools_at)
 	tool_ring = _image("res://assets/gfx/selected.png", self, Vector2.ZERO)
+	tool_key = _key(tools_at + STRIP_KEY)
+	_image("res://assets/gfx/strip_aim.png", self, tools_at + AIM_AT)
+	aim_key = _key(tools_at + AIM_AT + AIM_KEY)
 	_image("res://assets/gfx/join.png", self, Vector2(0, JOIN_Y))
 	sun = _image("res://assets/gfx/sun.png", self, Vector2.ZERO)
 	moon = _image("res://assets/gfx/moon.png", self, Vector2.ZERO)
@@ -134,6 +154,16 @@ func _device(player: int) -> int:
 	return pads[0] if pads.size() == 1 and player == 1 else -1
 
 
+## What the cues should show: this player's gamepad, or their side of the keyboard.
+static func caps(keys: Dictionary, device: int) -> Dictionary:
+	if device >= 0:
+		return BUTTONS
+	var names := {}
+	for action: String in BUTTONS:
+		names[action] = OS.get_keycode_string(keys[action])
+	return names
+
+
 func _unhandled_key_input(event: InputEvent) -> void:
 	if not event.is_pressed():
 		return
@@ -149,7 +179,12 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 
 func refresh() -> void:
+	stage.marta_keys = caps(KEYS_MARTA, _device(0))
+	stage.giulio_keys = caps(KEYS_GIULIO, _device(1))
 	stage.sync()
+	(colour_key.texture as AtlasTexture).region = Stage.cap_rect(stage.marta_keys.next)
+	(tool_key.texture as AtlasTexture).region = Stage.cap_rect(stage.giulio_keys.next)
+	(aim_key.texture as AtlasTexture).region = Stage.cap_rect(stage.giulio_keys.alt)
 	var half := Vector2(HALF) / ZOOM / 2.0
 	var lo := half.x
 	var hi := Sim.W * Stage.B - half.x

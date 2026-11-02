@@ -29,15 +29,19 @@ With two gamepads, the first is Marta's. With one, it's Giulio's and Marta takes
 | Next colour or tool | Q | J | LB or RB |
 | Drive the house, ring its bell | F | I | Y |
 
-Whatever you're about to act on lights up. While Giulio holds the aim button, the direction keys move his target up to
-3 blocks away. The drive button works anywhere along the house, except at the bell on its back end, where it rings.
+Whatever you're about to act on lights up, with its key or button beside it. The keys for colours, tools and aiming sit
+by the strips at the top left, and show gamepad buttons when that player has a gamepad. While Giulio holds the aim
+button, the direction keys move his target up to 3 blocks away. The drive button works anywhere along the house, except
+at the bell on its back end, where it rings. If the house can't go, it shudders and a crossed wheel appears on whatever
+stopped it.
 
 ## What's in the prototype
 
 - **The two views:** one world and two cameras, with the night tone added by a shader.
 - **Marta:** white and blue paint on rocks and blocks, a short reach, and washing paint off.
 - **Giulio:** hammer and pick, wood planks that never run out, and stress colours.
-- **The house:** it refuses a gap, breaks a bridge that can't hold it, and rolls back to safety.
+- **The house:** it refuses a gap, breaks a bridge that can't hold it, and rolls back to safety. What its wheels rest on
+  can't be dug out.
 - **The bell:** it brings back lost rocks, and leaves any that are holding up a plank or that the house has reached.
 
 Not in yet: playing alone, her cloak, mixing, the easel, more tools and block kinds, caves, creatures, sound, saving,
