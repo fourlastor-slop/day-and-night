@@ -19,6 +19,11 @@ func _ready() -> void:
 	await wait(3)
 	key(KEY_Q, false)
 	var ok := marta.pos.x > marta_x + 1.0 and giulio.pos.x > giulio_x + 1.0 and marta.colour == Sim.BLUE
+	var first := game.sim
+	key(KEY_F5, true)
+	await wait(3)
+	key(KEY_F5, false)
+	ok = ok and game.sim != first
 	print("live: ", "ok" if ok else "FAILED")
 	get_tree().quit(0 if ok else 1)
 

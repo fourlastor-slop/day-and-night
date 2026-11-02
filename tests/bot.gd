@@ -64,11 +64,43 @@ func walk(k: Sim.Kid, x: float) -> void:
 	run(12)
 
 
+## Holds his aim button and steps the target onto a square. Returns false if it can't get there.
+func aim(at: Vector2i) -> bool:
+	var k := sim.giulio
+	k.pad.alt = true
+	k.pad.alt_p = true
+	sim.tick()
+	k.pad.alt_p = false
+	for i in 12:
+		var d := at - k.target
+		if d == Vector2i.ZERO:
+			return true
+		k.pad.dir_p = Vector2i(signi(d.x), 0) if d.x != 0 else Vector2i(0, signi(d.y))
+		sim.tick()
+		k.pad.dir_p = Vector2i.ZERO
+	return false
+
+
 func press(k: Sim.Kid, what: String) -> void:
 	k.pad.set(what, true)
 	sim.tick()
 	k.pad.set(what, false)
 	sim.tick()
+
+
+## One tick of pressing everything at random, the way nobody plans for.
+func mash(k: Sim.Kid, rng: RandomNumberGenerator) -> void:
+	var p := k.pad
+	if rng.randf() < 0.1:
+		p.x = rng.randi_range(-1, 1)
+		p.alt = rng.randf() < 0.15
+		p.jump = rng.randf() < 0.4
+	p.jump_p = rng.randf() < 0.04
+	p.use_p = rng.randf() < 0.1
+	p.alt_p = rng.randf() < 0.02
+	p.next_p = rng.randf() < 0.01
+	p.interact_p = rng.randf() < 0.01
+	p.dir_p = Vector2i(rng.randi_range(-1, 1), rng.randi_range(-1, 1)) if rng.randf() < 0.1 else Vector2i.ZERO
 
 
 func run(ticks: int) -> void:

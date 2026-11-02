@@ -115,7 +115,7 @@ def stress_sheet(p):
 def river(p):
     W, H = p.W, p.H
     p.shape(rbox(-12, 8, W + 12, H + 20, 6), '#9cc1c4', line=.35, shadow=.1, rim=.3, hatch=1, step=18, amp=1.6)
-    for k, yy in enumerate((30, 58, 86, 112, 132)):
+    for k, yy in enumerate((30, 58, 86, 112, 132, 160, 186)):
         for x0 in np.arange(k * 34.0, W, 150):
             xs = np.linspace(x0, x0 + 72, 10)
             p.line(np.c_[xs, yy + 3 * np.sin(xs / 16)], '#c9dddc', w=2.1, a=.7, amp=.3, step=6)
@@ -222,7 +222,7 @@ def main():
     write('grass', cutout(216, 44, grass_sheet))
     write('block', cutout(192, 64, block_sheet))
     write('stress', cutout(192, 16, stress_sheet))
-    write('river', cutout(14 * U, 3 * U + 24, river))
+    write('river', cutout(14 * U, 4 * U + 24, river))
     write('ice', cutout(64, 36, ice))
     write('rock_plain', cutout(128, 128, lambda p: plain_rock(p, 64, 64, 47, 45, 13)))
     write('rock_white', cutout(128, 128, lambda p: painted_rock(p, 64, 64, 47, 45, WHITE, 19, base='#e3e6ea')))

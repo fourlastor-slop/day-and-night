@@ -2,6 +2,8 @@ extends Node
 ## Plays the river stop with bots driving the real tick(), and fails on anything that breaks the
 ## puzzle: the obvious plank bridge has to fail, and the two kids together have to get through.
 
+const MASH_TICKS := 18000
+
 var failed := 0
 var sim: Sim
 var bot: Bot
@@ -18,6 +20,15 @@ func _ready() -> void:
 	aiming_reaches_further()
 	pick_digs_and_planks_fill()
 	real_input_reaches_the_pads()
+	falling_at_the_river_wakes_you_on_land()
+	waking_on_planks_stands_on_them()
+	the_bell_only_brings_back_what_is_lost()
+	driving_works_where_the_bridge_starts()
+	wood_cant_reach_a_sunken_rock()
+	a_rock_wont_squash_its_rider()
+	ice_forming_around_you_wakes_you()
+	digging_stops_at_the_edge_of_the_world()
+	mashing_buttons_never_buries_a_kid()
 	print("stop: ", "FAILED %d" % failed if failed > 0 else "ok")
 	get_tree().quit(1 if failed > 0 else 0)
 
@@ -165,6 +176,155 @@ func real_input_reaches_the_pads() -> void:
 	check(pad.x == -1 and pad.use_p, "a gamepad reaches Giulio's pad")
 	pad.poll(Main.KEYS_GIULIO, 0)
 	check(pad.x == 0, "another gamepad doesn't move him")
+
+
+func falling_at_the_river_wakes_you_on_land() -> void:
+	for i in 2:
+		fresh()
+		bot.clear_road()
+		bot.drive()
+		var k: Sim.Kid = [sim.marta, sim.giulio][i]
+		drop_in_river(k)
+		check(k.grounded and k.pos.x < Sim.BANK_L, "with the house at the river you still wake on land")
+		check(sim.near_house(k), "you wake up by the house")
+
+
+func waking_on_planks_stands_on_them() -> void:
+	fresh()
+	var k := sim.marta
+	drop_in_river(k)
+	var spot := floori(k.pos.x)
+	k.pos.x -= 3.0
+	for x in range(spot - 1, spot + 2):
+		plank(x, Sim.ROAD - 1)
+		plank(x, Sim.ROAD - 2)
+	drop_in_river(k)
+	check(k.grounded and k.pos.y < Sim.ROAD, "she wakes on top of what was built there")
+	var x := k.pos.x
+	bot.walk(k, x + 4.0)
+	check(k.pos.x > x + 3.0, "and she can walk away")
+
+
+func the_bell_only_brings_back_what_is_lost() -> void:
+	fresh()
+	bot.clear_road()
+	bot.drive()
+	bot.build_deck(28, 35)
+	check(bot.paint_rock_from(31.0, 0), "she picks the first rock")
+	bot.run(90)
+	check(bot.paint_rock_from(35.5, 1), "she picks the second rock too soon")
+	bot.run(480)
+	check(sim.rocks[1].pos.y <= Sim.SKY + 0.5, "with nothing above it, it floats off")
+	bot.walk(sim.giulio, sim.house_x + Sim.BELL)
+	bot.press(sim.giulio, "interact_p")
+	bot.run(5)
+	check(sim.rocks[1].pos.is_equal_approx(sim.rocks[1].home), "the bell brings back the rock that floated off")
+	check(sim.rocks[0].colour == Sim.WHITE and absf(sim.rocks[0].pos.y - 11.0) < 0.06, "a rock holding up planks stays")
+	check(sim.rocks[2].pos.y <= Sim.SKY + 0.5, "a rock the house has reached stays gone")
+	bot.build_deck(36, 41)
+	check(bot.paint_rock_from(36.0, 1), "she gets a second try")
+	bot.run(90)
+	bot.drive()
+	check(sim.done, "the house still crosses after the bell")
+
+
+func driving_works_where_the_bridge_starts() -> void:
+	fresh()
+	bot.clear_road()
+	bot.drive()
+	bot.build_deck(28, 41)
+	bot.paint_rock_from(31.0, 0)
+	bot.run(90)
+	bot.paint_rock_from(36.0, 1)
+	bot.run(90)
+	bot.walk(sim.giulio, Sim.BANK_L + 0.5)
+	bot.press(sim.giulio, "interact_p")
+	check(sim.house_state == Sim.DRIVING, "pressing drive at the start of the bridge drives")
+	check(sim.rocks[0].colour == Sim.WHITE and sim.rocks[1].colour == Sim.WHITE, "and leaves her rocks alone")
+	bot.run(1800)
+	check(sim.done, "and the house crosses")
+
+
+## Wood can't stand in water, so a rock under the surface gives him nothing to build on.
+func wood_cant_reach_a_sunken_rock() -> void:
+	fresh()
+	bot.clear_road()
+	bot.build_deck(28, 41)
+	for x: int in [32, 37]:
+		bot.walk(sim.giulio, x + 0.5)
+		check(bot.aim(Vector2i(x, Sim.ROAD + 1)), "he can aim under the deck")
+		bot.press(sim.giulio, "use_p")
+		sim.giulio.pad.clear()
+		check(sim.cell(x, Sim.ROAD + 1) != Sim.BLOCK, "the river takes a plank aimed at a sunken rock")
+	check(max_span() >= Sim.MAX_SPAN, "he can't hold the bridge up without her")
+	bot.drive()
+	check(not sim.done, "so the house can't cross on his planks alone")
+
+
+func a_rock_wont_squash_its_rider() -> void:
+	fresh()
+	var k := sim.giulio
+	var rock := sim.rocks[2]
+	plank(24, 4)
+	k.pos = Vector2(24.0, rock.pos.y)
+	bot.run(2)
+	bot.walk(sim.marta, rock.pos.x - 0.6)
+	bot.press(sim.marta, "use_p")
+	bot.run(240)
+	check(k.pos.y - k.height > 4.9, "his head stops under the plank")
+	var x := k.pos.x
+	bot.walk(k, x - 3.0)
+	check(k.pos.x < x - 2.5, "and he can step off")
+	bot.run(240)
+	check(absf(rock.pos.y - 5.0) < 0.1, "then the rock rises until the plank stops it")
+
+
+func ice_forming_around_you_wakes_you() -> void:
+	fresh()
+	var k := sim.marta
+	k.pos = Vector2(33.5, Sim.SURFACE + 0.1)
+	sim.rocks[0].colour = Sim.BLUE
+	bot.run(5)
+	check(sim.near_house(k), "ice closing around her feet wakes her at the house")
+
+
+func digging_stops_at_the_edge_of_the_world() -> void:
+	fresh()
+	var k := sim.giulio
+	k.pos = Vector2(Sim.W - 0.5, Sim.ROAD)
+	bot.run(2)
+	bot.press(k, "next_p")
+	bot.press(k, "use_p")
+	check(sim.cell(0, Sim.ROAD) == Sim.EARTH, "digging past the edge leaves the far side of the world alone")
+
+
+func mashing_buttons_never_buries_a_kid() -> void:
+	for s in 8:
+		fresh()
+		if s % 2 == 1:
+			bot.clear_road()
+			bot.drive()
+		var rng := RandomNumberGenerator.new()
+		rng.seed = s
+		var buried := 0
+		for i in MASH_TICKS:
+			bot.mash(sim.marta, rng)
+			bot.mash(sim.giulio, rng)
+			sim.tick()
+			for k: Sim.Kid in [sim.marta, sim.giulio]:
+				if sim._tiles_hit(k.rect().grow(-0.05)):
+					buried += 1
+		check(buried == 0, "mashing never leaves a kid inside a block (seed %d: %d ticks)" % [s, buried])
+
+
+func drop_in_river(k: Sim.Kid) -> void:
+	k.pos = Vector2(Sim.BANK_L + 1.5, Sim.SURFACE + 0.5)
+	bot.run(30)
+
+
+func plank(x: int, y: int) -> void:
+	sim.cells[y * Sim.W + x] = Sim.BLOCK
+	sim._dirty = true
 
 
 func send_key(code: Key, down: bool) -> void:

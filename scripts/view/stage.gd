@@ -143,6 +143,9 @@ func sync() -> void:
 		var r: Sim.Rock = sim.rocks[i]
 		rocks[i].texture = rock_tex[r.colour]
 		rocks[i].position = r.rect().get_center() * B
+		# Paint stays bright through the water.
+		rocks[i].z_index = 1 if r.colour == Sim.PLAIN else 3
+		wisps[i].z_index = rocks[i].z_index
 		wisps[i].visible = r.colour == Sim.WHITE
 		wisps[i].position = rocks[i].position + Vector2(0, B * 1.1)
 	_sync_house()

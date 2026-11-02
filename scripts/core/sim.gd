@@ -12,7 +12,7 @@ enum { PARKED, DRIVING, BACKING }
 const W := 60
 const H := 15
 const ROAD := 10
-const SURFACE := 12
+const SURFACE := 11
 const BANK_L := 28
 const BANK_R := 42
 
@@ -42,7 +42,7 @@ const HOUSE_W := 9.0
 const HOUSE_H := 8.0
 const WHEELS: Array[float] = [2.2, 6.8]
 const HOUSE_SPEED := 3.0
-const BELL := 7.6
+const BELL := 1.1
 const GOAL := 46.0
 
 
@@ -73,7 +73,7 @@ class Kid:
 	var coyote := 0
 	var buffer := 0
 	var pad := Pad.new()
-	var wake: Vector2
+	var wake := 4.0
 
 	var colour := WHITE
 	var pick_rock: Rock = null
@@ -85,7 +85,6 @@ class Kid:
 
 	func _init(at: Vector2) -> void:
 		pos = at
-		wake = at
 
 	func rect() -> Rect2:
 		return Rect2(pos.x - half, pos.y - height, half * 2, height)
@@ -122,7 +121,8 @@ func _init() -> void:
 				cells[_i(x, y)] = WATER
 			elif y >= ROAD and not wet:
 				cells[_i(x, y)] = EARTH
-	# Sandbars that hold the two rocks a block below where a bridge would run.
+	# Sandbars that hold the two rocks a block below where a bridge would run. Their tops stay under
+	# the water, so wood can't stand on them and only something that rises reaches the deck.
 	for x in [32, 33, 37, 38]:
 		cells[_i(x, 14)] = EARTH
 	rocks.append(Rock.new(Vector2(32, 12)))
@@ -133,6 +133,7 @@ func _init() -> void:
 	giulio = Kid.new(Vector2(16, ROAD))
 	giulio.height = 1.6
 	giulio.jump_v = 14.4
+	giulio.wake = 5.0
 
 
 func tick() -> void:
@@ -197,7 +198,7 @@ func _tick_rocks() -> void:
 	for r in rocks:
 		var before := r.pos
 		if r.colour == WHITE:
-			if r.pos.y > SKY:
+			if r.pos.y > SKY and not _pinned(r):
 				_rock_move(r, Vector2(0, -RISE * DT))
 		else:
 			r.vy = minf(r.vy + GRAVITY * DT, MAX_FALL)
@@ -224,12 +225,28 @@ func _rock_move(r: Rock, d: Vector2) -> bool:
 	return false
 
 
-## A kid standing on a rock rides it.
+## A kid standing on a rock rides it, as long as there's room for them.
 func _carry(r: Rock, before: Vector2) -> void:
 	for k: Kid in [marta, giulio]:
-		var box := k.rect()
-		if absf(k.pos.y - before.y) < 0.08 and box.end.x > before.x and box.position.x < before.x + r.size.x:
+		if _riding(k, r, before) and _room(k, r.pos - before):
 			k.pos += r.pos - before
+
+
+func _riding(k: Kid, r: Rock, at: Vector2) -> bool:
+	var box := k.rect()
+	return absf(k.pos.y - at.y) < 0.08 and box.end.x > at.x and box.position.x < at.x + r.size.x
+
+
+func _room(k: Kid, d: Vector2) -> bool:
+	return not _tiles_hit(Rect2(k.rect().position + d, k.rect().size))
+
+
+## A rock waits under a kid it can't lift any further, so nobody gets pressed into the blocks.
+func _pinned(r: Rock) -> bool:
+	for k: Kid in [marta, giulio]:
+		if _riding(k, r, r.pos) and not _room(k, Vector2(0, -RISE * DT)):
+			return true
+	return false
 
 
 func _slides(r: Rock) -> bool:
@@ -285,7 +302,9 @@ func _tick_kid(k: Kid) -> void:
 	_kid_x(k, k.vel.x * DT)
 	k.grounded = false
 	_kid_y(k, k.vel.y * DT)
-	if k.pos.y > H or cell(floori(k.pos.x), floori(k.pos.y - 0.2)) == WATER and not frozen(floori(k.pos.x), floori(k.pos.y - 0.2)):
+	var feet := Vector2i(floori(k.pos.x), floori(k.pos.y - 0.2))
+	var wet := cell(feet.x, feet.y) == WATER and not frozen(feet.x, feet.y)
+	if k.pos.y > H or wet or _tiles_hit(k.rect().grow(-0.05)):
 		_wake(k)
 
 
@@ -315,9 +334,12 @@ func _kid_y(k: Kid, d: float) -> void:
 		k.pos.y += d / n
 
 
-## Falling costs time, never progress: you wake up at the house.
+## Falling or getting caught costs time, never progress: you wake up where the house last stood on
+## solid ground, which is never over water, and on top of anything built there.
 func _wake(k: Kid) -> void:
-	k.pos = Vector2(house_x + k.wake.x - 3.0, ROAD)
+	k.pos = Vector2(house_safe + k.wake, ROAD)
+	while _tiles_hit(k.rect()):
+		k.pos.y -= 1.0
 	k.vel = Vector2.ZERO
 	events.append({"kind": "wake", "kid": k})
 
@@ -406,12 +428,12 @@ func _use_tool() -> void:
 	var k := giulio
 	if k.pad.next_p:
 		k.tool = PICK if k.tool == HAMMER else HAMMER
-	if not k.pad.use_p:
-		return
 	var c := k.target
+	if not k.pad.use_p or c.x < 0 or c.x >= W or c.y < 0 or c.y >= H:
+		return
 	var what := cell(c.x, c.y)
 	if k.tool == PICK:
-		if what == EARTH and c.y < H:
+		if what == EARTH:
 			cells[_i(c.x, c.y)] = AIR
 			_dirty = true
 		return
@@ -503,15 +525,25 @@ func near_bell(k: Kid) -> bool:
 	return absf(k.pos.x - (house_x + BELL)) < 1.2
 
 
-## The bell puts every loose rock back, so nothing can be lost for good.
+## The bell puts loose rocks back, so nothing can be lost for good. One holding up a plank is doing
+## its job and stays, and so does one whose place the house has reached.
 func _ring() -> void:
 	for r in rocks:
+		if _holding(r) or r.home.x < house_x + HOUSE_W:
+			continue
 		r.pos = r.home
 		r.colour = PLAIN
 		r.vx = 0.0
 		r.vy = 0.0
 	_dirty = true
 	events.append({"kind": "bell"})
+
+
+func _holding(r: Rock) -> bool:
+	for x in range(floori(r.pos.x), ceili(r.rect().end.x)):
+		if cell(x, roundi(r.pos.y) - 1) == BLOCK:
+			return true
+	return false
 
 
 func _tick_house() -> void:

@@ -122,7 +122,8 @@ A simplified Terraria, tuned to be easy to pick up.
 - **The house is heavy.** Blocks never fall on their own, and a stretched bridge still holds the kids. Driving onto it
   adds load: if it can't hold, it breaks, the house rolls back to safety, and he rebuilds.
 - **White objects are supports.** A white rock pressing up under a bridge holds it up.
-- **Water has a current.** It carries away anything placed in it except stone.
+- **Water has a current.** It carries away anything placed in it except stone. So wood can stand on a rock that
+  breaks the surface but not on one under it, and that choice decides whether a river needs Marta.
 - **Iron needs a furnace.** He finds ore, sets it beside a stone she painted red, and iron is his for good.
 
 ## What makes a challenge real
@@ -143,8 +144,9 @@ A simplified Terraria, tuned to be easy to pick up.
   rules apply at once and how precise the movement is. Giulio's challenges come from trying, watching it fail and
   fixing it, with short chains and visible feedback. Long chains, planning ahead and fine control go to Marta.
 - **Nothing runs out,** so there is nothing to recover.
-- **Lost objects come back.** Ring the bell at the house and every loose object at this stop returns to where it
-  started, so a rock floated out of reach can't block the game.
+- **Lost objects come back.** Ring the bell at the back of the house and loose objects at this stop return to where
+  they started, so a rock floated out of reach can't block the game. Anything holding something up stays, and so
+  does anything whose place the house has reached, so the bell never undoes a solution.
 - **They have each other.** Marta can talk Giulio through a hard moment, and he can do the same for her. If both
   are stuck, a wordless sketch of the first step is available on request.
 - **Hard extras are optional.** Each stop has a tough side goal with a house upgrade as its reward, so there's more

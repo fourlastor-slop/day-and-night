@@ -404,7 +404,7 @@ def house(p, x, gy, u=U, wheels=True):
         y = B - (1.15 - k * -.0 + k * -.42) * u
         p.shape(rbox(dx0 - .05 * u + k * 0, B - (1.3 - k * .42) * u, dx1 + .05 * u, B - (1.12 - k * .42) * u, 3), WOOD, line=.5,
                 shadow=.15)
-    bx, by = L + 7.7 * u, B - 3.7 * u
+    bx, by = L + 1.1 * u, B - 3.7 * u
     p.line([[bx - .3 * u, by - .55 * u], [bx + .05 * u, by - .55 * u]], WOOD_D, w=3.5, a=1)
     p.shape(np.array([(bx - .22 * u, by + .05 * u), (bx - .14 * u, by - .34 * u), (bx - .02 * u, by - .46 * u),
                       (bx + .1 * u, by - .34 * u), (bx + .18 * u, by + .05 * u)]), '#cdaa52', line=.6, shadow=.12, rim=.2)

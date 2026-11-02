@@ -14,7 +14,7 @@ This is a prototype of one stop: the river.
 tools/run.sh
 ```
 
-F11 toggles fullscreen, and Enter starts again once the house has crossed.
+F11 toggles fullscreen. F5 starts the stop again at any time, and so does Enter once the house has crossed.
 
 ## Controls
 
@@ -30,7 +30,7 @@ With two gamepads, the first is Marta's. With one, it's Giulio's and Marta takes
 | Drive the house, ring its bell | F | I | Y |
 
 Whatever you're about to act on lights up. While Giulio holds the aim button, the direction keys move his target up to
-3 blocks away.
+3 blocks away. The drive button works anywhere along the house, except at the bell on its back end, where it rings.
 
 ## What's in the prototype
 
@@ -38,7 +38,7 @@ Whatever you're about to act on lights up. While Giulio holds the aim button, th
 - **Marta:** white and blue paint on rocks and blocks, a short reach, and washing paint off.
 - **Giulio:** hammer and pick, wood planks that never run out, and stress colours.
 - **The house:** it refuses a gap, breaks a bridge that can't hold it, and rolls back to safety.
-- **The bell:** it puts the stop's rocks back where they started.
+- **The bell:** it brings back lost rocks, and leaves any that are holding up a plank or that the house has reached.
 
 Not in yet: playing alone, her cloak, mixing, the easel, more tools and block kinds, caves, creatures, sound, saving,
 and white paint on blocks, which looks right but doesn't hold anything up yet.

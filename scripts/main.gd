@@ -141,6 +141,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		KEY_F11:
 			var full := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
+		KEY_F5:
+			_start()
 		KEY_ENTER:
 			if sim.done:
 				_start()
