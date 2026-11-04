@@ -6,7 +6,7 @@ A side-view co-op adventure for two players at one computer: Marta, who loves dr
 building. They're kids of different ages and both are smart, so challenges must be real challenges: hard, but
 never impossible.
 
-Working title. This is a draft. The river stop exists as a prototype, and the rest is untested.
+Working title. This is a draft. The Meadow's first three stops exist as a prototype, and the rest is untested.
 
 ## The hook
 
@@ -49,9 +49,10 @@ Night is a blue-toned version of the same world, and everything stays visible. T
 plus a few things that exist on one side only, used sparingly: sunflowers that open by day, moonstones that only
 show at night. Each player sees the other as a faint glow, so they can find each other.
 
-Darkness is an event, not the default, because constant darkness would get old quickly. Only caves are dark. Her
-yellow cloak lights her own way, but he has no light of his own, so he can only get through if she paints the
-loose stones in the cave yellow.
+Darkness is an event, not the default, because constant darkness would get old quickly. Only caves are dark: any
+open space with ground somewhere above it. Light spreads only through open space, so it never leaks through a wall.
+Her yellow cloak lights her own way, in her half of the screen only, but he has no light of his own, so he can only
+get through if she paints the loose stones in the cave yellow.
 
 ### Fitting half the screen
 
@@ -82,7 +83,7 @@ facing, lights up to show what she'll paint, and one button does it.
 
 | Colour | Property | On objects | On her cloak |
 |---|---|---|---|
-| Cloud white | Floats | Rises until something stops it, and holds up what's resting on it. A connected group rises if it has at least as much white as plain | Glide |
+| Cloud white | Floats | Rises until something stops it, and holds up what's resting on it. A connected group rises if it has at least as much white as plain, with the house on it weighing as much as 4 plain blocks | Glide |
 | Fire red | Warm | Melts nearby ice and snow. A stone painted red is a furnace | Cross snow |
 | Ice blue | Cold | Freezes nearby water, cools nearby lava into rock, and slides | Cross hot ground |
 | Lightning yellow | Shines | Lights up dark caves, keeps sootlings away, powers machines | Carry a light |
@@ -101,7 +102,7 @@ A simplified Terraria, tuned to be easy to pick up.
 - **Place anything.** Blocks go anywhere within reach if they touch something. There is no recipe for a bridge, just
   blocks and rules.
 - **Vehicles.** Any connected group with wheels rolls, and drives itself with a yellow-painted block as its engine.
-  The last vehicle is the house itself.
+  It drives the way Marta was facing when she painted it. The last vehicle is the house itself.
 - **Reach.** The square he'd act on lights up, next to him in the direction he's facing, and holding a button lets
   him move it up to about 3 blocks away. Anything further needs a way to get closer, and a white rock can carry him
   up to places he can't build from.
@@ -120,6 +121,10 @@ A simplified Terraria, tuned to be easy to pick up.
 
 - **Every block shows its stress**, from green to red, based on how far it is from a support. Wood spans about 3,
   stone 5 and iron 9. A pillar down to the ground resets the count.
+- **Rock is ground he can't dig.** It holds blocks up the way earth does, but only the drill gets through it, so rock
+  gives a stop its fixed shape: shelves, cliffs and mine walls.
+- **Rope hangs things.** Anything tied to something solid above it counts as held up, so he can hang a bridge, and
+  things tied together move as one.
 - **The house is heavy.** Blocks never fall on their own, and a stretched bridge still holds the kids. Driving onto it
   adds load: if it can't hold, it breaks, the house rolls back to safety, and he rebuilds.
 - **The house keeps its footing.** What its wheels rest on can't be dug or knocked out, and neither can the spot it
@@ -129,7 +134,9 @@ A simplified Terraria, tuned to be easy to pick up.
 - **White objects are supports.** A white rock pressing up under a bridge holds it up. Repainted blue there, it freezes
   into the surface and keeps holding.
 - **Water has a current.** It carries away anything placed in it except stone. So wood can stand on a rock that
-  breaks the surface but not on one under it, and that choice decides whether a river needs Marta.
+  breaks the surface but not on one under it, and that choice decides whether a river needs Marta. Stone sinks to the
+  bottom and stays, so a stone pillar is built up from the riverbed. It's heavy too, and counts double when a group
+  lifts.
 - **Iron needs a furnace.** He finds ore, sets it beside a stone she painted red, and iron is his for good.
 
 ## What makes a challenge real
@@ -152,7 +159,8 @@ A simplified Terraria, tuned to be easy to pick up.
 - **Nothing runs out,** so there is nothing to recover.
 - **Lost objects come back.** Ring the bell at the back of the house and loose objects at this stop return to where
   they started, so a rock floated out of reach can't block the game. Anything holding something up stays, and so
-  does anything whose place the house has reached, so the bell never undoes a solution.
+  does anything whose place the house has reached, so the bell never undoes a solution. A rock the house is only
+  waiting at hasn't been reached, so one jammed in its way can always come back.
 - **They have each other.** Marta can talk Giulio through a hard moment, and he can do the same for her. If both
   are stuck, a wordless sketch of the first step is available on request.
 - **Hard extras are optional.** Each stop has a tough side goal with a house upgrade as its reward, so there's more
@@ -182,6 +190,22 @@ Examples at the intended difficulty:
   nearby. She leaves red stones to lead it, and he builds walls and digs pits to steer it. It's a boss with no
   fighting.
 
+### The first build, stop by stop
+
+Who has the harder job alternates, and the two jobs connect at least once in every stop. The maps are in
+`scripts/core/stops.gd`.
+
+| Stop | Beat | Harder job | The problem |
+|---|---|---|---|
+| The Brook | teach | Giulio | A mound too high to jump: he digs through, which is also how she reaches the rock she floats away. A brook narrow enough for a plain line of planks |
+| The Gully | use | Marta | A gully too wide for planks alone, so he adds a pillar, and she can't cross until his deck is there. A boulder under a rock shelf: white jams it, so she shoves it out on blue first |
+| The River | twist | Marta | Wood can't stand in the river and its rocks are under the surface, so she floats them up under his deck |
+| The Cliff Lift | land's end | both | He ties his platform to the old pulley's ropes, the house drives on, and she paints enough of it white to lift the house up the cliff |
+| The Mine Mouth | teach | Giulio | Dark inside: she lights loose stones yellow so he can see. Rubble only he can dig, and a pool where wood breaks but stone holds |
+| The Old Rails | use | Marta | A boulder in a low tunnel: white jams it on the ceiling, so he builds a cart under it, she drops it on, and a yellow block drives it away |
+| The Sootling Hall | twist | Giulio | A dark hall over deep water with no loose stones: he builds, and she paints his own blocks yellow to keep the sootlings off |
+| The Long Tunnel | land's end | both | Everything the mines taught, along one old gallery out to the daylight |
+
 ## Needing each other
 
 - **He needs her for** light in caves, heat for iron, lift for himself and heavy things, and engines for his vehicles.
@@ -196,8 +220,8 @@ Examples at the intended difficulty:
 
 There is no fighting and nothing to defeat. Every creature is a problem to think through or a friend to make.
 
-- **Creatures to outwit.** Sootlings hide in dark caves and keep away from light. The Snow Giant walks towards
-  warmth.
+- **Creatures to outwit.** Sootlings hide in dark caves and keep away from light. If one touches Giulio in the dark,
+  he wakes up in the house. The Snow Giant walks towards warmth.
 - **Creatures to help.** Giulio digs out a lost mole, and Marta thaws a frozen bird with a red stone. Once helped,
   they move into the house and lend a hand, like the mole marking buried finds.
 

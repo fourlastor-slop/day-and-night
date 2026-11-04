@@ -4,7 +4,7 @@ extends RefCounted
 ## in blocks with y pointing down. tick() is deterministic and knows nothing about drawing, so the
 ## tests play exactly the game the window shows.
 
-enum { AIR, EARTH, WATER, BLOCK }
+enum { AIR, EARTH, WATER, BLOCK, ROCK }
 enum { PLAIN, WHITE, BLUE }
 enum { HAMMER, PICK }
 enum { PARKED, DRIVING, BACKING }
@@ -12,9 +12,7 @@ enum { PARKED, DRIVING, BACKING }
 const W := 60
 const H := 15
 const ROAD := 10
-const SURFACE := 11
-const BANK_L := 28
-const BANK_R := 42
+const TERRAIN := {".": AIR, "#": EARTH, "%": ROCK, "~": WATER, "=": BLOCK}
 
 const DT := 1.0 / 60.0
 const STEP := 1.0 / 16.0
@@ -44,7 +42,6 @@ const WHEELS: Array[float] = [2.2, 6.8]
 const TREAD := 0.6
 const HOUSE_SPEED := 3.0
 const BELL := 1.1
-const GOAL := 46.0
 
 
 class Rock:
@@ -94,9 +91,11 @@ class Kid:
 		return pos - Vector2(0, height / 2)
 
 
+var name := ""
 var cells := PackedByteArray()
 var ice := PackedByteArray()
 var span := PackedInt32Array()
+var surface := PackedInt32Array()
 var paint := {}
 var rocks: Array[Rock] = []
 var marta: Kid
@@ -104,6 +103,7 @@ var giulio: Kid
 var house_x := 3.0
 var house_safe := 3.0
 var house_state := PARKED
+var goal := 46.0
 var done := false
 var t := 0
 var revision := 0
@@ -111,30 +111,56 @@ var events: Array[Dictionary] = []
 var _dirty := true
 
 
-func _init() -> void:
+## Builds a stop from one of the maps in Stops.
+func _init(stop: Dictionary) -> void:
+	name = stop.name
 	cells.resize(W * H)
 	ice.resize(W * H)
 	span.resize(W * H)
+	surface.resize(W)
+	var map: Array = stop.map
+	assert(map.size() == H, "%s needs %d rows" % [name, H])
+	var tops := {}
 	for y in H:
+		var row: String = map[y]
+		assert(row.length() == W, "%s row %d needs %d squares" % [name, y, W])
 		for x in W:
-			var wet := x >= BANK_L and x < BANK_R
-			if y >= SURFACE and wet:
-				cells[_i(x, y)] = WATER
-			elif y >= ROAD and not wet:
-				cells[_i(x, y)] = EARTH
-	# Sandbars that hold the two rocks a block below where a bridge would run. Their tops stay under
-	# the water, so wood can't stand on them and only something that rises reaches the deck.
-	for x in [32, 33, 37, 38]:
-		cells[_i(x, 14)] = EARTH
-	rocks.append(Rock.new(Vector2(32, 12)))
-	rocks.append(Rock.new(Vector2(37, 12)))
-	# This one sits on the road, so it has to go before the house can leave.
-	rocks.append(Rock.new(Vector2(23, 8)))
-	marta = Kid.new(Vector2(14, ROAD))
-	giulio = Kid.new(Vector2(16, ROAD))
+			var c := row[x]
+			if TERRAIN.has(c):
+				cells[_i(x, y)] = TERRAIN[c]
+			else:
+				cells[_i(x, y)] = WATER if _wet(row, x) else AIR
+				if c == c.to_upper():
+					tops[c] = Vector2(x, y)
+	var letters := tops.keys()
+	letters.sort()
+	for c: String in letters:
+		rocks.append(Rock.new(tops[c]))
+	for x in W:
+		surface[x] = -1
+		for y in H:
+			if cells[_i(x, y)] == WATER:
+				surface[x] = y
+				break
+	house_x = stop.house
+	house_safe = house_x
+	goal = stop.goal
+	marta = Kid.new(Vector2(stop.marta, ROAD))
+	giulio = Kid.new(Vector2(stop.giulio, ROAD))
 	giulio.height = 1.6
 	giulio.jump_v = 14.4
 	giulio.wake = 5.0
+
+
+## A rock's own squares are water if the water carries on beside it, and air otherwise.
+func _wet(row: String, x: int) -> bool:
+	for step in [-1, 1]:
+		var at: int = x + step
+		while at >= 0 and at < W and not TERRAIN.has(row[at]):
+			at += step
+		if at >= 0 and at < W and row[at] == "~":
+			return true
+	return false
 
 
 func tick() -> void:
@@ -166,7 +192,13 @@ func frozen(x: int, y: int) -> bool:
 
 func solid(x: int, y: int) -> bool:
 	var c := cell(x, y)
-	return c == EARTH or c == BLOCK or (c == WATER and frozen(x, y))
+	return c == EARTH or c == ROCK or c == BLOCK or (c == WATER and frozen(x, y))
+
+
+## Earth or rock: the ground itself, which holds up whatever stands on it.
+func ground(x: int, y: int) -> bool:
+	var c := cell(x, y)
+	return c == EARTH or c == ROCK
 
 
 func span_at(x: int, y: int) -> int:
@@ -275,19 +307,20 @@ func _freeze() -> void:
 	next.resize(W * H)
 	for r in rocks:
 		if r.colour == BLUE:
-			var c := r.rect().get_center()
-			for x in range(int(c.x) - FREEZE_R, int(c.x) + FREEZE_R + 1):
-				if cell(x, SURFACE) == WATER:
-					next[_i(x, SURFACE)] = 1
+			_chill(next, int(r.rect().get_center().x))
 	for key: int in paint:
 		if paint[key] == BLUE:
-			var x0 := key % W
-			for x in range(x0 - FREEZE_R, x0 + FREEZE_R + 1):
-				if cell(x, SURFACE) == WATER:
-					next[_i(x, SURFACE)] = 1
+			_chill(next, key % W)
 	if next != ice:
 		ice = next
 		_dirty = true
+
+
+func _chill(next: PackedByteArray, x0: int) -> void:
+	for x in range(maxi(x0 - FREEZE_R, 0), mini(x0 + FREEZE_R + 1, W)):
+		var y := surface[x]
+		if y >= 0 and cell(x, y) == WATER:
+			next[_i(x, y)] = 1
 
 
 # ---- kids -----------------------------------------------------------------------------------
@@ -429,7 +462,10 @@ func _default_target(k: Kid, here: Vector2i) -> Vector2i:
 	var front := here + Vector2i(k.facing, 0)
 	var low := front + Vector2i(0, 1)
 	if k.tool == PICK:
-		return front if cell(front.x, front.y) == EARTH else here + Vector2i(0, 1)
+		for c: Vector2i in [front, front + Vector2i.UP]:
+			if cell(c.x, c.y) == EARTH:
+				return c
+		return here + Vector2i(0, 1)
 	var empty := cell(low.x, low.y) == AIR or (cell(low.x, low.y) == WATER and not frozen(low.x, low.y))
 	return low if empty else front
 
@@ -491,7 +527,7 @@ func _stress() -> void:
 				continue
 			if _held(x, y):
 				span[_i(x, y)] = 0
-			elif cell(x - 1, y) == EARTH or cell(x + 1, y) == EARTH:
+			elif ground(x - 1, y) or ground(x + 1, y):
 				span[_i(x, y)] = 1
 	var changed := true
 	while changed:
@@ -515,7 +551,7 @@ func _held(x: int, y: int) -> bool:
 	var below := y + 1
 	while cell(x, below) == BLOCK:
 		below += 1
-	if cell(x, below) == EARTH:
+	if ground(x, below):
 		return true
 	for r in rocks:
 		if absf(r.pos.y - below) < 0.06 and r.pos.x < x + 1 and r.pos.x + r.size.x > x:
@@ -559,7 +595,9 @@ func bearing(c: Vector2i) -> bool:
 ## its job and stays, and so does one whose place the house has reached.
 func _ring() -> void:
 	for r in rocks:
-		if _holding(r) or r.home.x < house_x + HOUSE_W:
+		# Measured from the front of its body, so a rock the house is only waiting at, touching its
+		# front, isn't reached.
+		if _holding(r) or r.home.x < house_x + HOUSE_W - 0.15:
 			continue
 		r.pos = r.home
 		r.colour = PLAIN
@@ -591,7 +629,7 @@ func _tick_house() -> void:
 		if _tiles_hit(body):
 			_refuse(_first_tile(body))
 			return
-		var ground := true
+		var on_ground := true
 		for w in WHEELS:
 			var x := floori(next + w + TREAD)
 			var c := cell(x, ROAD)
@@ -599,14 +637,14 @@ func _tick_house() -> void:
 				_collapse(Vector2i(x, ROAD))
 				house_state = BACKING
 				return
-			if c != BLOCK and c != EARTH:
+			if c != BLOCK and not ground(x, ROAD):
 				_refuse(Vector2(x + 0.5, ROAD + 0.5))
 				return
-			ground = ground and c == EARTH
+			on_ground = on_ground and c != BLOCK
 		house_x = next
-		if ground:
+		if on_ground:
 			house_safe = next
-		if house_x >= GOAL:
+		if house_x >= goal:
 			house_state = PARKED
 			done = true
 

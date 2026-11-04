@@ -1,14 +1,31 @@
 extends Node
-## Runs the real main scene for a moment with real key events, to prove the input reaches the game
-## and the cues show the right keys.
+## Runs the real main scene for a moment with real key events, to prove the input reaches the game,
+## the road goes from stop to stop, and the cues show the right keys.
+
+const SAVE := "user://test_progress.cfg"
 
 var failed := 0
 
 
 func _ready() -> void:
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE))
 	var game: Main = load("res://scenes/main.tscn").instantiate()
+	game.save_path = SAVE
 	add_child(game)
 	await wait(5)
+	check(game.sim.name == Stops.ROAD[0].name, "a new road starts at the first stop")
+	game.sim.done = true
+	await tap(KEY_ENTER)
+	check(game.stop == 1 and game.sim.name == Stops.ROAD[1].name, "Enter goes on to the next stop")
+	check(saved() == 1, "and the road remembers it")
+	await tap(KEY_F7)
+	check(game.stop == 2, "F7 skips ahead")
+	await tap(KEY_F6)
+	check(game.stop == 1, "and F6 goes back")
+	game.go_to(Stops.ROAD.size())
+	check(game.stop == 0, "past the last stop the road starts again")
+	game.go_to(Stops.ROAD.find(Stops.RIVER))
+	await wait(3)
 	var marta := game.sim.marta
 	var giulio := game.sim.giulio
 	var marta_x := marta.pos.x
@@ -59,16 +76,35 @@ func _ready() -> void:
 	check(game.sim.house_state == Sim.PARKED and game.sim.house_x > 10.0, "the rock stops the house")
 	check(stage.stop.visible and stage.stop.position == rock.rect().get_center() * Stage.B, "the crossed wheel lands on it")
 	var first := game.sim
-	key(KEY_F5, true)
-	await wait(3)
-	key(KEY_F5, false)
-	check(game.sim != first, "F5 starts the stop again")
+	await tap(KEY_F5)
+	check(game.sim != first and game.sim.name == first.name, "F5 starts the same stop again")
+	var again: Main = load("res://scenes/main.tscn").instantiate()
+	again.save_path = SAVE
+	again.manual = true
+	add_child(again)
+	await wait(2)
+	check(again.stop == game.stop, "a new game carries on from the saved stop")
+	again.queue_free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE))
 	print("live: ", "ok" if failed == 0 else "FAILED")
 	get_tree().quit(0 if failed == 0 else 1)
 
 
+func saved() -> int:
+	var save := ConfigFile.new()
+	save.load(SAVE)
+	return save.get_value("road", "stop", -1)
+
+
 func shows(cue: Sprite2D, cap: String) -> bool:
 	return cue.visible and cue.region_rect == Stage.cap_rect(cap)
+
+
+func tap(code: Key) -> void:
+	key(code, true)
+	await wait(2)
+	key(code, false)
+	await wait(1)
 
 
 func wait(ticks: int) -> void:

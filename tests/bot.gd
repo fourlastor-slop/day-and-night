@@ -12,13 +12,23 @@ func _init(world: Sim) -> void:
 
 ## She walks up to the rock on the road and floats it away.
 func clear_road() -> void:
-	walk(sim.marta, sim.rocks[2].pos.x - 0.6)
+	walk(sim.marta, road_rock().pos.x - 0.6)
 	press(sim.marta, "use_p")
 	run(120)
 
 
+## The first rock that starts out sitting on the road.
+func road_rock() -> Sim.Rock:
+	for r in sim.rocks:
+		if is_equal_approx(r.home.y + r.size.y, Sim.ROAD):
+			return r
+	return null
+
+
 ## Lays planks along the road, one at a time. Returns false if he ever aims somewhere else.
 func build_deck(from: int, to: int) -> bool:
+	if sim.giulio.tool != Sim.HAMMER:
+		press(sim.giulio, "next_p")
 	var ok := true
 	for x in range(from, to + 1):
 		walk(sim.giulio, x - 0.5)
@@ -79,6 +89,28 @@ func aim(at: Vector2i) -> bool:
 		sim.tick()
 		k.pad.dir_p = Vector2i.ZERO
 	return false
+
+
+## Digs a way into a mound with the pick, at his feet and then at his head, one square at a time.
+func tunnel(from: int, to: int) -> void:
+	var k := sim.giulio
+	if k.tool != Sim.PICK:
+		press(k, "next_p")
+	for x in range(from, to + 1):
+		walk(k, x - 0.5)
+		k.facing = 1
+		run(2)
+		press(k, "use_p")
+		press(k, "use_p")
+	walk(k, to + 0.5)
+
+
+## Aims at a square and uses whatever tool he's holding there. Returns false if he can't aim at it.
+func use_at(at: Vector2i) -> bool:
+	var ok := aim(at)
+	press(sim.giulio, "use_p")
+	sim.giulio.pad.clear()
+	return ok
 
 
 func press(k: Sim.Kid, what: String) -> void:

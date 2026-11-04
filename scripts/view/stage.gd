@@ -21,27 +21,37 @@ const STRESS_CELL := Vector2(48, 16)
 const BLOCK_CELL := 64.0
 const EARTH_ROWS := 5
 const EARTH_BASE := Color("937c63")
+const ROCK_BASE := Color("8f8d86")
+## Ground above the top of the house's body draws in front of it, so its flag goes behind a shelf.
+const ROOF := Sim.ROAD - int(Sim.HOUSE_H)
 
 
+## The tile grid, from row top down to row bottom.
 class Ground extends Node2D:
 	var sim: Sim
+	var top := 0
+	var bottom := Sim.H
 	var earth: Texture2D = load("res://assets/gfx/earth.png")
+	var cliff: Texture2D = load("res://assets/gfx/cliff.png")
 	var grass: Texture2D = load("res://assets/gfx/grass.png")
 	var block: Texture2D = load("res://assets/gfx/block.png")
 	var stress: Texture2D = load("res://assets/gfx/stress.png")
 
 	func _draw() -> void:
-		for y in Sim.H:
+		for y in range(top, bottom):
 			for x in Sim.W:
-				if sim.cell(x, y) == Sim.EARTH:
-					draw_rect(Rect2(x * B, y * B, B, B), EARTH_BASE)
-		for y in Sim.H:
+				var c := sim.cell(x, y)
+				if c == Sim.EARTH or c == Sim.ROCK:
+					draw_rect(Rect2(x * B, y * B, B, B), EARTH_BASE if c == Sim.EARTH else ROCK_BASE)
+		for y in range(top, bottom):
 			for x in Sim.W:
+				var col := (x * 7 + y * 3) % 5 % 3
 				if sim.cell(x, y) == Sim.EARTH:
 					var row := mini(y - Sim.ROAD, EARTH_ROWS - 1) if y >= Sim.ROAD else 0
-					var col := (x * 7 + y * 3) % 5 % 3
 					_cell(earth, x, y, Rect2(col * BLOCK_CELL, row * BLOCK_CELL, BLOCK_CELL, BLOCK_CELL))
-		for y in Sim.H:
+				elif sim.cell(x, y) == Sim.ROCK:
+					_cell(cliff, x, y, Rect2(col * BLOCK_CELL, 0, BLOCK_CELL, BLOCK_CELL))
+		for y in range(top, bottom):
 			for x in Sim.W:
 				if sim.cell(x, y) == Sim.BLOCK:
 					_block(x, y)
@@ -65,9 +75,35 @@ class Frost extends Node2D:
 	var ice: Texture2D = load("res://assets/gfx/ice.png")
 
 	func _draw() -> void:
-		for x in Sim.W:
-			if sim.frozen(x, Sim.SURFACE):
-				draw_texture(ice, Vector2(x * B - 8, Sim.SURFACE * B - 8))
+		for y in Sim.H:
+			for x in Sim.W:
+				if sim.frozen(x, y):
+					draw_texture(ice, Vector2(x * B - 8, y * B - 8))
+
+
+## Every pool is cut from the same river painting, repeated along it if it's wider than that.
+class Water extends Node2D:
+	var sim: Sim
+	var river: Texture2D = load("res://assets/gfx/river.png")
+
+	func _draw() -> void:
+		var x := 0
+		while x < Sim.W:
+			var top := sim.surface[x]
+			var start := x
+			x += 1
+			while x < Sim.W and sim.surface[x] == top:
+				x += 1
+			if top >= 0:
+				_pool(start, x, top)
+
+	func _pool(x0: int, x1: int, top: int) -> void:
+		var size := river.get_size()
+		var at := x0 * B
+		while at < x1 * B:
+			var w := minf(size.x, x1 * B - at)
+			draw_texture_rect_region(river, Rect2(at, top * B, w, size.y), Rect2(0, 0, w, size.y))
+			at += w
 
 
 ## One kid's cues, on that kid's half of the screen only, because their keys are different.
@@ -81,6 +117,7 @@ class Cues:
 
 var sim: Sim
 var ground: Ground
+var overhead: Ground
 var frost: Frost
 var rocks: Array[Sprite2D] = []
 var wisps: Array[Sprite2D] = []
@@ -114,14 +151,21 @@ func _init(world: Sim) -> void:
 	visibility_layer = EVERY
 	ground = Ground.new()
 	ground.sim = sim
+	ground.top = ROOF
 	add_child(ground)
+	overhead = Ground.new()
+	overhead.sim = sim
+	overhead.bottom = ROOF
+	overhead.z_index = 5
+	add_child(overhead)
 	for r in sim.rocks:
 		wisps.append(_sprite("res://assets/gfx/wisp.png", 1))
 		rocks.append(_sprite("res://assets/gfx/rock_plain.png", 1))
-	var river := _sprite("res://assets/gfx/river.png", 2)
-	river.centered = false
-	river.position = Vector2(Sim.BANK_L * B, Sim.SURFACE * B)
-	river.modulate.a = 0.62
+	var water := Water.new()
+	water.sim = sim
+	water.z_index = 2
+	water.modulate.a = 0.62
+	add_child(water)
 	frost = Frost.new()
 	frost.sim = sim
 	frost.z_index = 3
@@ -189,6 +233,7 @@ func sync() -> void:
 	if seen != sim.revision:
 		seen = sim.revision
 		ground.queue_redraw()
+		overhead.queue_redraw()
 		frost.queue_redraw()
 	for i in rocks.size():
 		var r: Sim.Rock = sim.rocks[i]

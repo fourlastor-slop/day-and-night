@@ -4,10 +4,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 . tools/godot.sh
+# Registers any new class_name, which a headless run would otherwise not know about.
+timeout 120 "$GODOT_BIN" --headless --import --path . >/dev/null 2>&1 || true
 
 log=$(mktemp)
 trap 'rm -f "$log"' EXIT
-timeout 120 "$GODOT_BIN" --headless --audio-driver Dummy --path . res://tests/stop.tscn 2>&1 | tee "$log"
+timeout 300 "$GODOT_BIN" --headless --audio-driver Dummy --path . res://tests/stop.tscn 2>&1 | tee "$log"
 timeout 60 "$GODOT_BIN" --headless --audio-driver Dummy --path . res://tests/live.tscn 2>&1 | tee -a "$log"
 if grep -q "SCRIPT ERROR" "$log"; then
 	echo "Script errors during the check." >&2

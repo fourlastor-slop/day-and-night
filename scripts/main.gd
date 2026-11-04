@@ -28,6 +28,9 @@ const BUTTONS := {"use": "X", "alt": "B", "next": "LB", "interact": "Y"}
 
 ## Set by the tests, which drive the sim themselves.
 var manual := false
+## Where the road remembers which stop the kids are on. The tests point it somewhere else.
+var save_path := "user://progress.cfg"
+var stop := 0
 var sim: Sim
 var stage: Stage
 var day_cam: Camera2D
@@ -59,13 +62,14 @@ func _ready() -> void:
 	top.world_2d = world_view.world_2d
 	top_cam = top.get_child(0)
 	_hud()
+	stop = _saved()
 	_start()
 
 
 func _start() -> void:
 	if stage != null:
 		stage.queue_free()
-	sim = Sim.new()
+	sim = Sim.new(Stops.ROAD[stop])
 	stage = Stage.new(sim)
 	world_view.add_child(stage)
 	banner.visible = false
@@ -173,9 +177,29 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
 		KEY_F5:
 			_start()
+		KEY_F6:
+			go_to(stop - 1)
+		KEY_F7:
+			go_to(stop + 1)
 		KEY_ENTER:
 			if sim.done:
-				_start()
+				go_to(stop + 1)
+
+
+## Moves to another stop on the road and remembers it. Past the last stop built, the road starts again.
+func go_to(index: int) -> void:
+	stop = posmod(index, Stops.ROAD.size())
+	var save := ConfigFile.new()
+	save.set_value("road", "stop", stop)
+	save.save(save_path)
+	_start()
+
+
+func _saved() -> int:
+	var save := ConfigFile.new()
+	if save.load(save_path) != OK:
+		return 0
+	return clampi(save.get_value("road", "stop", 0), 0, Stops.ROAD.size() - 1)
 
 
 func refresh() -> void:
@@ -196,7 +220,10 @@ func refresh() -> void:
 	night_sky.position.x = -(night_cam.position.x - lo) * ZOOM * PARALLAX
 	colour_ring.position = STRIP_AT + Vector2(SWATCH_X[sim.marta.colour - Sim.WHITE], 8)
 	tool_ring.position = STRIP_AT + Vector2(SWATCH_X[sim.giulio.tool], HALF.y + 18 + 8)
-	var gap := lerpf(FAR, NEAR, clampf((sim.house_x - 3.0) / (Sim.GOAL - 3.0), 0.0, 1.0))
+	# The sun and moon close in across the whole road, so each stop moves them a little.
+	var start: float = Stops.ROAD[stop].house
+	var here := clampf((sim.house_x - start) / (sim.goal - start), 0.0, 1.0)
+	var gap := lerpf(FAR, NEAR, (stop + here) / Stops.ROAD_LENGTH)
 	sun.position = Vector2(SCREEN.x / 2 - 60 - gap, HALF.y - 60)
 	moon.position = Vector2(SCREEN.x / 2 - 60 + gap, HALF.y - 60)
 	banner.visible = sim.done

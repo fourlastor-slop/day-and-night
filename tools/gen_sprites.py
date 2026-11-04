@@ -14,6 +14,7 @@ from paint import (BLUE, GREEN, GRASS, ORANGE, P, RED, STONE, U, WHITE, WOOD, WO
 
 OUT = os.path.join(os.path.dirname(__file__), '..', 'assets', 'gfx')
 EARTH = ('#b39877', '#a98f70', '#9e866a', '#937c63', '#88725b')
+ROCKS = ('#a8a69d', '#9e9c94', '#94928b')
 INK = '#3d332c'
 
 
@@ -84,6 +85,15 @@ def earth_sheet(p):
             p.shape(rbox(px, py, px + 48, py + 48, 6), c, line=.17, lw=1.3, shadow=.07, rim=.07, amp=.7, hatch=(r + v) % 3, step=9)
             if v == 2:
                 p.shape(rock(px + 26, py + 28, 13, 10, r + 3), STONE, line=.35, lw=1.3, shadow=.12, amp=.6, step=6)
+
+
+def cliff_sheet(p):
+    for v, col in enumerate(ROCKS):
+        px, py = v * 64 + 8, 8
+        p.shape(rbox(px, py, px + 48, py + 48, 4), col, line=.3, lw=1.5, shadow=.09, rim=.12, amp=.8, hatch=v, step=8)
+        rs = np.random.RandomState(31 + v)
+        x0, y0 = px + 10 + rs.rand() * 20, py + 8 + rs.rand() * 10
+        p.line([(x0, y0), (x0 + 6 + rs.rand() * 6, y0 + 10), (x0 + 2, y0 + 22)], '#6f6d68', w=1.4, a=.6, amp=.5)
 
 
 def grass_sheet(p):
@@ -283,6 +293,7 @@ def main():
     write('backdrop_night', backdrop(True), (2040, 540))
     write('earth', cutout(192, 320, earth_sheet))
     write('grass', cutout(216, 44, grass_sheet))
+    write('cliff', cutout(192, 64, cliff_sheet))
     write('block', cutout(192, 64, block_sheet))
     write('stress', cutout(192, 16, stress_sheet))
     write('river', cutout(14 * U, 4 * U + 24, river))
