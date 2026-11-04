@@ -37,6 +37,8 @@ class Ground extends Node2D:
 	var cliff: Texture2D = load("res://assets/gfx/cliff.png")
 	var grass: Texture2D = load("res://assets/gfx/grass.png")
 	var block: Texture2D = load("res://assets/gfx/block.png")
+	var stone: Texture2D = load("res://assets/gfx/stone.png")
+	var wheel: Texture2D = load("res://assets/gfx/cart_wheel.png")
 	var stress: Texture2D = load("res://assets/gfx/stress.png")
 
 	func _draw() -> void:
@@ -55,7 +57,7 @@ class Ground extends Node2D:
 					_cell(cliff, x, y, Rect2(col * BLOCK_CELL, 0, BLOCK_CELL, BLOCK_CELL))
 		for y in range(top, bottom):
 			for x in Sim.W:
-				if sim.cell(x, y) == Sim.BLOCK:
+				if sim.placed(x, y):
 					_block(x, y)
 				elif sim.cell(x, y) == Sim.EARTH and sim.cell(x, y - 1) == Sim.AIR:
 					draw_texture_rect_region(grass, Rect2(x * B - 12, y * B - 18, 72, 44), Rect2((x % 3) * 72, 0, 72, 44))
@@ -63,10 +65,15 @@ class Ground extends Node2D:
 	func _block(x: int, y: int) -> void:
 		var colour: int = sim.paint.get(y * Sim.W + x, Sim.PLAIN)
 		# A straining block is drawn by Lifts, bobbing.
-		if not sim.strain.has(y * Sim.W + x):
-			_cell(block, x, y, Rect2(colour * BLOCK_CELL, 0, BLOCK_CELL, BLOCK_CELL))
+		if sim.cell(x, y) == Sim.WHEEL:
+			_cell(wheel, x, y, Rect2(0, 0, BLOCK_CELL, BLOCK_CELL))
+		elif not sim.strain.has(y * Sim.W + x):
+			_cell(stone if sim.cell(x, y) == Sim.STONE else block, x, y, Rect2(colour * BLOCK_CELL, 0, BLOCK_CELL, BLOCK_CELL))
+		# Green while well inside what this kind of block can span, then yellow, orange where the
+		# house would break it, and red past that.
 		var n := sim.span_at(x, y)
-		var level := 0 if n <= 1 else n - 1 if n < Sim.MAX_SPAN else 2 if n == Sim.MAX_SPAN else 3
+		var limit := sim.span_limit(x, y)
+		var level := 0 if n <= limit - 2 else 1 if n == limit - 1 else 2 if n == limit else 3
 		var from := Rect2(level * STRESS_CELL.x, 0, STRESS_CELL.x, STRESS_CELL.y)
 		draw_texture_rect_region(stress, Rect2(x * B, y * B + B - STRESS_CELL.y, STRESS_CELL.x, STRESS_CELL.y), from)
 
@@ -114,19 +121,28 @@ class Water extends Node2D:
 class Lifts extends Node2D:
 	var sim: Sim
 	var block: Texture2D = load("res://assets/gfx/block.png")
+	var stone: Texture2D = load("res://assets/gfx/stone.png")
+	var wheel: Texture2D = load("res://assets/gfx/cart_wheel.png")
 
 	func _draw() -> void:
 		for b in sim.bodies:
 			for c in b.cells:
-				_block(b.pos + Vector2(c), b.paint.get(c, Sim.PLAIN), 0.0)
+				var at := b.pos + Vector2(c)
+				if b.kinds.get(c, Sim.BLOCK) == Sim.WHEEL:
+					# A moving cart's wheels turn with it.
+					draw_set_transform((at + Vector2(0.5, 0.5)) * B, b.pos.x * 1.9)
+					draw_texture(wheel, -Vector2(BLOCK_CELL, BLOCK_CELL) / 2)
+					draw_set_transform(Vector2.ZERO)
+				else:
+					_block(at, b.paint.get(c, Sim.PLAIN), 0.0, b.kinds.get(c, Sim.BLOCK))
 		var bob := absf(sin(sim.t * 0.21)) * 3.0
 		for key: int in sim.strain:
 			var at := Vector2(key % Sim.W, floori(float(key) / Sim.W))
-			_block(at, sim.paint.get(key, Sim.PLAIN), bob * sim.strain[key])
+			_block(at, sim.paint.get(key, Sim.PLAIN), bob * sim.strain[key], sim.cell(int(at.x), int(at.y)))
 
-	func _block(at: Vector2, colour: int, up: float) -> void:
+	func _block(at: Vector2, colour: int, up: float, kind: int) -> void:
 		var to := Rect2(at * B - Vector2(8, 8 + up), Vector2(BLOCK_CELL, BLOCK_CELL))
-		draw_texture_rect_region(block, to, Rect2(colour * BLOCK_CELL, 0, BLOCK_CELL, BLOCK_CELL))
+		draw_texture_rect_region(stone if kind == Sim.STONE else block, to, Rect2(colour * BLOCK_CELL, 0, BLOCK_CELL, BLOCK_CELL))
 
 
 ## Ropes, sagging a little unless something hangs from them, and the one Giulio is carrying.
@@ -148,6 +164,31 @@ class Ropes extends Node2D:
 			points.append((a.lerp(b, t) + Vector2(0, sag * a.distance_to(b) * 4.0 * t * (1.0 - t))) * B)
 		draw_polyline(points, ROPE_DARK, 6.0, true)
 		draw_polyline(points, ROPE_LIGHT, 3.0, true)
+
+
+## Shades one half's caves from the sim's light: a tiny picture with one square of shade per block,
+## stretched over the world and smoothed, so light fades out softly.
+class Darkness extends Sprite2D:
+	var sim: Sim
+	var for_marta := false
+	var shade := Color.BLACK
+	var image := Image.create(Sim.W, Sim.H, false, Image.FORMAT_RGBA8)
+
+	func _init() -> void:
+		centered = false
+		scale = Vector2(B, B)
+		texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		texture = ImageTexture.create_from_image(image)
+
+	func refresh() -> void:
+		visible = sim.dark
+		if not visible:
+			return
+		var lit := sim.marta_light if for_marta else sim.light
+		for y in Sim.H:
+			for x in Sim.W:
+				image.set_pixel(x, y, Color(shade, (1.0 - lit[y * Sim.W + x]) * 0.94))
+		(texture as ImageTexture).update(image)
 
 
 ## One kid's cues, on that kid's half of the screen only, because their keys are different.
@@ -180,6 +221,11 @@ var stop_left := 0
 var use_hold := 0
 var lifts: Lifts
 var ropes: Ropes
+var marta_dark: Darkness
+var giulio_dark: Darkness
+## Each sootling is a shadow, which the dark hides, and a pair of eyes that shows through it.
+var soot_bodies: Array[Sprite2D] = []
+var soot_eyes: Array[Sprite2D] = []
 var marta_cues: Cues
 var giulio_cues: Cues
 var marta_keys := {}
@@ -187,10 +233,16 @@ var giulio_keys := {}
 var fx: Array[Dictionary] = []
 var seen := -1
 
-var rock_tex: Array[Texture2D] = [load("res://assets/gfx/rock_plain.png"), load("res://assets/gfx/rock_white.png"), load("res://assets/gfx/rock_blue.png")]
-var brush_tex: Dictionary = {Sim.WHITE: load("res://assets/gfx/marta_white.png"), Sim.BLUE: load("res://assets/gfx/marta_blue.png")}
+var rock_tex: Array[Texture2D] = [load("res://assets/gfx/rock_plain.png"), load("res://assets/gfx/rock_white.png"), load("res://assets/gfx/rock_blue.png"),
+		load("res://assets/gfx/rock_yellow.png")]
+## Her sprite by brush colour, with her red cloak or the yellow one she wears in the mines.
+var brush_tex: Dictionary = {Sim.WHITE: load("res://assets/gfx/marta_white.png"), Sim.BLUE: load("res://assets/gfx/marta_blue.png"),
+		Sim.YELLOW: load("res://assets/gfx/marta_yellow.png")}
+var cloak_tex: Dictionary = {Sim.WHITE: load("res://assets/gfx/marta_cloak_white.png"),
+		Sim.BLUE: load("res://assets/gfx/marta_cloak_blue.png"), Sim.YELLOW: load("res://assets/gfx/marta_cloak_yellow.png")}
 var tool_tex: Dictionary = {Sim.HAMMER: load("res://assets/gfx/giulio_hammer.png"), Sim.PICK: load("res://assets/gfx/giulio_pick.png"),
-		Sim.ROPE: load("res://assets/gfx/giulio_rope.png")}
+		Sim.ROPE: load("res://assets/gfx/giulio_rope.png"), Sim.CHISEL: load("res://assets/gfx/giulio_stone.png"),
+		Sim.WHEEL_TOOL: load("res://assets/gfx/giulio_wheel.png")}
 
 
 func _init(world: Sim) -> void:
@@ -222,8 +274,13 @@ func _init(world: Sim) -> void:
 	add_child(lifts)
 	ropes = Ropes.new()
 	ropes.sim = sim
-	ropes.z_index = 6
+	ropes.z_index = 5
 	add_child(ropes)
+	marta_dark = _darkness(DAY, Color("140f0b"), true)
+	giulio_dark = _darkness(NIGHT_TOP, Color("060a1a"), false)
+	for s in sim.soots:
+		soot_bodies.append(_sprite("res://assets/gfx/sootling.png", 3))
+		soot_eyes.append(_sprite("res://assets/gfx/soot_eyes.png", 7, DAY | NIGHT_TOP))
 	for d: Dictionary in sim.decor:
 		var s := _sprite("res://assets/gfx/%s.png" % d.sprite, 1)
 		s.centered = false
@@ -233,9 +290,9 @@ func _init(world: Sim) -> void:
 	house = _sprite("res://assets/gfx/house.png", 4)
 	house.centered = false
 	window = _sprite("res://assets/gfx/window.png", 5, NIGHT_TOP)
-	marta_glow = _sprite("res://assets/gfx/glow.png", 6, NIGHT_TOP)
+	marta_glow = _sprite("res://assets/gfx/glow.png", 7, NIGHT_TOP)
 	marta_glow.modulate = Color(1.0, 0.85, 0.7, 0.55)
-	giulio_glow = _sprite("res://assets/gfx/glow.png", 6, DAY)
+	giulio_glow = _sprite("res://assets/gfx/glow.png", 7, DAY)
 	giulio_glow.modulate = Color(1.0, 0.9, 0.65, 0.65)
 	marta = _sprite("res://assets/gfx/marta_white.png", 7, DAY)
 	marta.centered = false
@@ -259,6 +316,18 @@ func _sprite(path: String, z: int, layer := SHARED) -> Sprite2D:
 	s.visibility_layer = layer
 	add_child(s)
 	return s
+
+
+## Drawn over everything in the world but the kids, their glows and the cues.
+func _darkness(layer: int, shade: Color, for_marta: bool) -> Darkness:
+	var d := Darkness.new()
+	d.sim = sim
+	d.shade = shade
+	d.for_marta = for_marta
+	d.visibility_layer = layer
+	d.z_index = 6
+	add_child(d)
+	return d
 
 
 func _cues(layer: int) -> Cues:
@@ -295,6 +364,12 @@ func sync() -> void:
 		frost.queue_redraw()
 	lifts.queue_redraw()
 	ropes.queue_redraw()
+	marta_dark.refresh()
+	giulio_dark.refresh()
+	for i in sim.soots.size():
+		var bob := Vector2(0, sin(sim.t * 0.09 + i) * 4.0)
+		soot_bodies[i].position = sim.soots[i].pos * B + bob
+		soot_eyes[i].position = soot_bodies[i].position
 	for i in rocks.size():
 		var r: Sim.Rock = sim.rocks[i]
 		rocks[i].texture = rock_tex[r.colour]
@@ -307,7 +382,7 @@ func sync() -> void:
 	_sync_house()
 	_sync_kid(marta, sim.marta)
 	_sync_kid(giulio, sim.giulio)
-	marta.texture = brush_tex[sim.marta.colour]
+	marta.texture = (cloak_tex if sim.cloak == Sim.YELLOW else brush_tex)[sim.marta.colour]
 	giulio.texture = tool_tex[sim.giulio.tool]
 	marta_glow.position = sim.marta.centre() * B
 	giulio_glow.position = sim.giulio.centre() * B

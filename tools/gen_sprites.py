@@ -10,11 +10,13 @@ import numpy as np
 from PIL import Image
 
 from paint import (BLUE, GREEN, GRASS, ORANGE, P, RED, STONE, U, WHITE, WOOD, WOOD_D, YELLOW, Multi, cloud, ell, giulio, grass_strip,
-                   house, marta, painted_rock, plain_rock, rbox, rgb, ridge, rock, rope_coil, sparkle, tree, wheel)
+                   house, marta, painted_rock, plain_rock, rbox, rgb, ridge, rock, rope_coil, soot_eyes, sootling, sparkle, tree,
+                   wheel)
 
 OUT = os.path.join(os.path.dirname(__file__), '..', 'assets', 'gfx')
 EARTH = ('#b39877', '#a98f70', '#9e866a', '#937c63', '#88725b')
 ROCKS = ('#a8a69d', '#9e9c94', '#94928b')
+MASONRY = '#b3afa6'
 INK = '#3d332c'
 
 
@@ -110,8 +112,25 @@ def wood(p, px, py):
         p.dot(px + U - 7, py + U * ny, 1.8, WOOD_D, painted=False)
 
 
+def masonry(p, px, py):
+    p.shape(rbox(px, py, px + U, py + U, 3), MASONRY, line=.6, lw=1.8, shadow=.2, rim=.14, amp=.7, hatch=1, step=9)
+    for a, b in (((3, .5), (U - 3, .5)), ((U * .5, 3), (U * .5, .5)), ((U * .25, .5), (U * .25, U - 3)), ((U * .75, .5), (U * .75, U - 3))):
+        ya = U * a[1] if a[1] <= 1 else a[1]
+        yb = U * b[1] if b[1] <= 1 else b[1]
+        p.line([[px + a[0], py + ya], [px + b[0], py + yb]], '#7b776f', w=1.6, a=.6)
+
+
+def stone_sheet(p):
+    for v, col in enumerate((None, WHITE, BLUE, YELLOW)):
+        px, py = v * 64 + 8, 8
+        masonry(p, px, py)
+        if col:
+            p.shape(rbox(px + 1, py + 1, px + U - 1, py + U - 1, 3), col, kind='crayon', line=.6, lw=1.6, shadow=0, rim=.08, amp=.6,
+                    step=8, hatch=v)
+
+
 def block_sheet(p):
-    for v, col in enumerate((None, WHITE, BLUE)):
+    for v, col in enumerate((None, WHITE, BLUE, YELLOW)):
         px, py = v * 64 + 8, 8
         wood(p, px, py)
         if col:
@@ -166,9 +185,9 @@ def window(p):
     p.line([[60, 26], [60, 94]], WOOD_D, w=3, a=.9, amp=.4, painted=True)
 
 
-def colours_strip(p):
-    p.shape(rbox(10, 8, 186, 92, 12), '#f3ecdd', line=.5, shadow=.3, rim=.2, painted=True, hatch=1)
-    for k, col in enumerate((WHITE, BLUE)):
+def colours_strip(p, cols):
+    p.shape(rbox(10, 8, 26 + 80 * len(cols), 92, 12), '#f3ecdd', line=.5, shadow=.3, rim=.2, painted=True, hatch=1)
+    for k, col in enumerate(cols):
         q = ell(58 + k * 80, 50, 25, 25, 22)
         p.shape(q, '#d9d2c2' if col == WHITE else '#efe6d4', line=0, shadow=.12, rim=0, painted=True, amp=1)
         p.shape(q, col, kind='crayon', line=.7, lw=1.8, shadow=0, rim=.08, amp=1, step=7, hatch=k)
@@ -187,6 +206,10 @@ def tools_strip(p, tools):
             p.line(arc, '#7f8892', w=7, a=1, amp=.3, grain=False, painted=True)
         elif tool == 'rope':
             rope_coil(p, cx, cy - 2, 20)
+        elif tool == 'stone':
+            masonry(p, cx - 22, cy - 22)
+        elif tool == 'wheel':
+            wheel(p, cx, cy, 22)
 
 
 def crane(p):
@@ -308,28 +331,41 @@ def main():
     write('earth', cutout(192, 320, earth_sheet))
     write('grass', cutout(216, 44, grass_sheet))
     write('cliff', cutout(192, 64, cliff_sheet))
-    write('block', cutout(192, 64, block_sheet))
+    write('block', cutout(256, 64, block_sheet))
+    write('stone', cutout(256, 64, stone_sheet))
     write('stress', cutout(192, 16, stress_sheet))
     write('river', cutout(14 * U, 4 * U + 24, river))
     write('ice', cutout(64, 36, ice))
     write('rock_plain', cutout(128, 128, lambda p: plain_rock(p, 64, 64, 47, 45, 13)))
     write('rock_white', cutout(128, 128, lambda p: painted_rock(p, 64, 64, 47, 45, WHITE, 19, base='#e3e6ea')))
     write('rock_blue', cutout(128, 128, lambda p: painted_rock(p, 64, 64, 47, 45, BLUE, 23, base='#efe6d4', hatch=1)))
+    write('rock_yellow', cutout(128, 128, lambda p: painted_rock(p, 64, 64, 47, 45, YELLOW, 29, base='#efe6d4')))
     write('wisp', cutout(170, 70, wisp))
     write('marta_white', cutout(150, 124, lambda p: marta(p, 60 / U, 116 / U, 1, tip=WHITE)))
     write('marta_blue', cutout(150, 124, lambda p: marta(p, 60 / U, 116 / U, 1, tip=BLUE)))
+    write('marta_yellow', cutout(150, 124, lambda p: marta(p, 60 / U, 116 / U, 1, tip=YELLOW)))
+    for name, tip in (('white', WHITE), ('blue', BLUE), ('yellow', YELLOW)):
+        write('marta_cloak_' + name, cutout(150, 124, lambda p, tip=tip: marta(p, 60 / U, 116 / U, 1, cloak=YELLOW, tip=tip)))
     write('giulio_hammer', cutout(140, 112, lambda p: giulio(p, 56 / U, 104 / U, 1, tool='hammer')))
     write('giulio_pick', cutout(140, 112, lambda p: giulio(p, 56 / U, 104 / U, 1, tool='pick')))
     write('giulio_rope', cutout(140, 112, lambda p: giulio(p, 56 / U, 104 / U, 1, tool='rope')))
+    write('giulio_stone', cutout(140, 112, lambda p: giulio(p, 56 / U, 104 / U, 1, tool='stone')))
+    write('giulio_wheel', cutout(140, 112, lambda p: giulio(p, 56 / U, 104 / U, 1, tool='wheel')))
+    write('cart_wheel', cutout(64, 64, lambda p: wheel(p, 32, 32, 22)))
+    write('sootling', cutout(96, 96, lambda p: sootling(p, 48, 48, 30, 5)))
+    write('soot_eyes', cutout(96, 96, lambda p: soot_eyes(p, 48, 48, 30)))
     write('house', cutout(540, 540, lambda p: house(p, 60 / U, 520 / U, wheels=False)))
     write('wheel', cutout(120, 120, lambda p: wheel(p, 60, 60, 49)))
     write('window', cutout(120, 120, window))
     write('glow', glow())
     write('ring', cutout(200, 200, ring))
     write('target', cutout(80, 80, target))
-    write('strip_colours', cutout(196, 100, colours_strip))
+    write('strip_colours', cutout(196, 100, lambda p: colours_strip(p, (WHITE, BLUE))))
+    write('strip_colours_3', cutout(276, 100, lambda p: colours_strip(p, (WHITE, BLUE, YELLOW))))
     write('strip_tools', cutout(196, 100, lambda p: tools_strip(p, ('hammer', 'pick'))))
     write('strip_tools_3', cutout(276, 100, lambda p: tools_strip(p, ('hammer', 'pick', 'rope'))))
+    write('strip_tools_4', cutout(356, 100, lambda p: tools_strip(p, ('hammer', 'stone', 'pick', 'rope'))))
+    write('strip_tools_5', cutout(436, 100, lambda p: tools_strip(p, ('hammer', 'stone', 'pick', 'rope', 'wheel'))))
     write('selected', cutout(84, 84, selected))
     write('join', cutout(1920, 44, join))
     write('sun', cutout(120, 120, lambda p: disc(p, '#f3c95a')))

@@ -4,9 +4,10 @@ extends RefCounted
 ## in blocks with y pointing down. tick() is deterministic and knows nothing about drawing, so the
 ## tests play exactly the game the window shows.
 
-enum { AIR, EARTH, WATER, BLOCK, ROCK }
-enum { PLAIN, WHITE, BLUE }
-enum { HAMMER, PICK, ROPE }
+enum { AIR, EARTH, WATER, BLOCK, ROCK, STONE, WHEEL }
+enum { PLAIN, WHITE, BLUE, YELLOW }
+## The chisel lays stone where the hammer lays wood.
+enum { HAMMER, PICK, ROPE, CHISEL, WHEEL_TOOL }
 enum { PARKED, DRIVING, BACKING }
 
 const W := 60
@@ -14,7 +15,9 @@ const H := 15
 const ROAD := 10
 const TERRAIN := {".": AIR, "#": EARTH, "%": ROCK, "~": WATER, "=": BLOCK}
 ## The tools a stop can offer him, by the names stops.gd uses.
-const TOOLS := {"hammer": HAMMER, "pick": PICK, "rope": ROPE}
+const TOOLS := {"hammer": HAMMER, "pick": PICK, "rope": ROPE, "stone": CHISEL, "wheel": WHEEL_TOOL}
+## The colours a stop can give her, by the names stops.gd uses.
+const COLOURS := {"white": WHITE, "blue": BLUE, "yellow": YELLOW}
 
 const DT := 1.0 / 60.0
 const STEP := 1.0 / 16.0
@@ -30,6 +33,7 @@ const BUFFER := 7
 const REACH := 3.5
 const BUILD_REACH := 3
 const MAX_SPAN := 3
+const STONE_SPAN := 5
 const FREE := 99
 
 const RISE := 2.2
@@ -46,6 +50,16 @@ const HOUSE_SPEED := 3.0
 const BELL := 1.1
 const HOUSE_LOAD := 4
 const MAX_ROPE := 8.0
+const CART_SPEED := 3.0
+const SOOT_SPEED := 2.4
+## How far a sootling sees him, how much light it won't go into, and how close counts as touching.
+const SOOT_SEE := 6.0
+const SOOT_LIT := 0.3
+const SOOT_REACH := 0.7
+const LIGHT_R := 4.0
+const CLOAK_R := 3.0
+## How far daylight reaches into a cave from its mouth.
+const MOUTH_R := 3.0
 ## Once its wheels are above this row, the house has risen out of view and the stop is done.
 const LIFTED := -1.0
 
@@ -64,6 +78,16 @@ class Rock:
 
 	func rect() -> Rect2:
 		return Rect2(pos, size)
+
+
+## A shy shadow that lives in a cave's dark and drifts towards Giulio there.
+class Soot:
+	var home: Vector2
+	var pos: Vector2
+
+	func _init(at: Vector2) -> void:
+		home = at
+		pos = at
 
 
 ## A rope tied between two things, or hanging loose from a hook. An end on a block moves with it.
@@ -118,6 +142,14 @@ class Body:
 	var house := false
 	## The ends of ropes tied to its blocks: the rope, which end, and where it is on the body.
 	var ends: Array = []
+	## What each of its squares is: wood, stone or a wheel.
+	var kinds := {}
+	## Which way each of its yellow blocks was painted facing.
+	var dirs := {}
+	## A cart drives the way its engine faces and falls when nothing holds it up. Anything else lifts.
+	var cart := false
+	var dir := 1
+	var vy := 0.0
 
 	func rect(c: Vector2i) -> Rect2:
 		return Rect2(pos + Vector2(c), Vector2.ONE)
@@ -135,7 +167,19 @@ var paint := {}
 var rocks: Array[Rock] = []
 var bodies: Array[Body] = []
 var ropes: Array[Rope] = []
+var soots: Array[Soot] = []
 var tools: Array = [HAMMER, PICK]
+var colours: Array = [WHITE, BLUE]
+## Her cloak's colour. Yellow lights her own way.
+var cloak := PLAIN
+## Which way Marta faced as she painted each block, which is the way a yellow engine drives.
+var paint_dir := {}
+## Whether this stop has caves, which are dark.
+var dark := false
+## How lit each square is, from 0 to 1: by daylight and yellow things for Giulio, and by her own cloak
+## as well for Marta.
+var light := PackedFloat32Array()
+var marta_light := PackedFloat32Array()
 ## Pictures that belong to the stop but play no part in it, like the pulley's crane.
 var decor: Array = []
 ## How close each block in a white group is to lifting it, from 0 to 1, for groups that can't yet.
@@ -172,6 +216,9 @@ func _init(stop: Dictionary) -> void:
 			if c == "|":
 				cells[_i(x, y)] = AIR
 				_hang(x)
+			elif c == "@":
+				cells[_i(x, y)] = AIR
+				soots.append(Soot.new(Vector2(x + 0.5, y + 0.5)))
 			elif TERRAIN.has(c):
 				cells[_i(x, y)] = TERRAIN[c]
 			else:
@@ -192,6 +239,13 @@ func _init(stop: Dictionary) -> void:
 	tools.clear()
 	for t: String in stop.get("tools", ["hammer", "pick"]):
 		tools.append(TOOLS[t])
+	colours.clear()
+	for c: String in stop.get("colours", ["white", "blue"]):
+		colours.append(COLOURS[c])
+	cloak = COLOURS.get(stop.get("cloak", ""), PLAIN)
+	dark = stop.get("dark", false)
+	light.resize(W * H)
+	marta_light.resize(W * H)
 	house_x = stop.house
 	house_safe = house_x
 	goal = stop.goal
@@ -240,6 +294,8 @@ func tick() -> void:
 	if _dirty:
 		_lift()
 		_stress()
+	_tick_soots()
+	_light()
 
 
 func cell(x: int, y: int) -> int:
@@ -254,7 +310,18 @@ func frozen(x: int, y: int) -> bool:
 
 func solid(x: int, y: int) -> bool:
 	var c := cell(x, y)
-	return c == EARTH or c == ROCK or c == BLOCK or (c == WATER and frozen(x, y))
+	return c == EARTH or c == ROCK or c == BLOCK or c == STONE or c == WHEEL or (c == WATER and frozen(x, y))
+
+
+## Something he placed: a wood or stone block, or a wheel.
+func placed(x: int, y: int) -> bool:
+	var c := cell(x, y)
+	return c == BLOCK or c == STONE or c == WHEEL
+
+
+## How far a run of this block can reach from a support before it breaks under the house.
+func span_limit(x: int, y: int) -> int:
+	return STONE_SPAN if cell(x, y) == STONE else MAX_SPAN
 
 
 ## Earth or rock: the ground itself, which holds up whatever stands on it.
@@ -481,7 +548,7 @@ func _pick() -> void:
 	best = REACH
 	for y in range(floori(c.y - REACH), ceili(c.y + REACH) + 1):
 		for x in range(floori(c.x - REACH), ceili(c.x + REACH) + 1):
-			if cell(x, y) != BLOCK:
+			if not placed(x, y):
 				continue
 			var d := (Vector2(x, y) + Vector2(0.5, 0.5)).distance_to(c)
 			if d <= best and (x + 0.5 - c.x) * k.facing >= -0.5:
@@ -492,7 +559,7 @@ func _pick() -> void:
 func _paint() -> void:
 	var k := marta
 	if k.pad.next_p:
-		k.colour = BLUE if k.colour == WHITE else WHITE
+		k.colour = colours[(colours.find(k.colour) + 1) % colours.size()]
 	var colour := -1
 	if k.pad.use_p:
 		colour = k.colour
@@ -505,10 +572,13 @@ func _paint() -> void:
 		k.pick_rock.vy = 0.0
 		events.append({"kind": "paint", "at": k.pick_rock.rect().get_center()})
 	elif k.pick_block.x >= 0:
+		var i := _i(k.pick_block.x, k.pick_block.y)
 		if colour == PLAIN:
-			paint.erase(_i(k.pick_block.x, k.pick_block.y))
+			paint.erase(i)
+			paint_dir.erase(i)
 		else:
-			paint[_i(k.pick_block.x, k.pick_block.y)] = colour
+			paint[i] = colour
+			paint_dir[i] = k.facing
 		events.append({"kind": "paint", "at": Vector2(k.pick_block) + Vector2(0.5, 0.5)})
 	_dirty = true
 
@@ -554,13 +624,17 @@ func _use_tool() -> void:
 	if k.tool == ROPE:
 		_rope_at(c)
 	elif what == AIR:
-		cells[_i(c.x, c.y)] = BLOCK
+		cells[_i(c.x, c.y)] = STONE if k.tool == CHISEL else WHEEL if k.tool == WHEEL_TOOL else BLOCK
 		_dirty = true
+	elif what == WATER and k.tool == CHISEL:
+		_sink(c)
 	elif what == WATER:
 		events.append({"kind": "swept", "cell": c})
 	else:
+		# Any building tool takes out what it's aimed at: wood, stone or a wheel.
 		cells[_i(c.x, c.y)] = AIR
 		paint.erase(_i(c.x, c.y))
+		paint_dir.erase(_i(c.x, c.y))
 		_dirty = true
 
 
@@ -575,10 +649,19 @@ func can_use() -> bool:
 	if giulio.tool == ROPE:
 		if giulio.rope != null:
 			return _ties_to(giulio.rope, c)
-		return _hanging_at(c) != null or _rope_end_at(c) != null or what == BLOCK or ground(c.x, c.y)
+		return _hanging_at(c) != null or _rope_end_at(c) != null or placed(c.x, c.y) or ground(c.x, c.y)
 	if what == AIR:
 		return _touches(c) and not _occupied(c)
-	return what == BLOCK or (what == WATER and not frozen(c.x, c.y))
+	return placed(c.x, c.y) or (what == WATER and not frozen(c.x, c.y))
+
+
+## Stone dropped into water sinks until something stops it, and stays there.
+func _sink(c: Vector2i) -> void:
+	var y := c.y
+	while cell(c.x, y + 1) == WATER and not frozen(c.x, y + 1):
+		y += 1
+	cells[_i(c.x, y)] = STONE
+	_dirty = true
 
 
 func _touches(c: Vector2i) -> bool:
@@ -603,7 +686,7 @@ func _stress() -> void:
 	span.fill(FREE)
 	for y in H:
 		for x in W:
-			if cells[_i(x, y)] != BLOCK:
+			if not placed(x, y):
 				continue
 			if _held(x, y):
 				span[_i(x, y)] = 0
@@ -614,13 +697,13 @@ func _stress() -> void:
 		changed = false
 		for y in range(H - 1, -1, -1):
 			for x in W:
-				if cells[_i(x, y)] != BLOCK:
+				if not placed(x, y):
 					continue
 				var best := span[_i(x, y)]
 				for side in [-1, 1]:
-					if cell(x + side, y) == BLOCK:
+					if placed(x + side, y):
 						best = mini(best, span[_i(x + side, y)] + 1)
-				if cell(x, y + 1) == BLOCK:
+				if placed(x, y + 1):
 					best = mini(best, span[_i(x, y + 1)])
 				if best < span[_i(x, y)]:
 					span[_i(x, y)] = best
@@ -632,7 +715,7 @@ func _held(x: int, y: int) -> bool:
 		if _hangs(r, Vector2i(x, y)):
 			return true
 	var below := y + 1
-	while cell(x, below) == BLOCK:
+	while placed(x, below):
 		below += 1
 	if ground(x, below):
 		return true
@@ -662,14 +745,14 @@ func _rope_at(c: Vector2i) -> void:
 		return
 	k.rope = Rope.new()
 	k.rope.a = _centre(c)
-	k.rope.a_block = cell(c.x, c.y) == BLOCK
+	k.rope.a_block = placed(c.x, c.y)
 
 
 ## Ties a rope between two squares, each a block or the ground. Returns false if it can't go there.
 func tie(from: Vector2i, to: Vector2i) -> bool:
 	var r := Rope.new()
 	r.a = _centre(from)
-	r.a_block = cell(from.x, from.y) == BLOCK
+	r.a_block = placed(from.x, from.y)
 	if (not r.a_block and not ground(from.x, from.y)) or not _ties_to(r, to):
 		return false
 	_finish(r, to)
@@ -689,7 +772,7 @@ func untie(r: Rope) -> void:
 ## Whether a rope's free end can be tied here: a block or the ground, in reach of the other end, with
 ## a block at one end at least.
 func _ties_to(r: Rope, c: Vector2i) -> bool:
-	var block := cell(c.x, c.y) == BLOCK
+	var block := placed(c.x, c.y)
 	if not block and not ground(c.x, c.y):
 		return false
 	if not (block or r.a_block) or Vector2i(r.a.floor()) == c:
@@ -699,7 +782,7 @@ func _ties_to(r: Rope, c: Vector2i) -> bool:
 
 func _finish(r: Rope, c: Vector2i) -> void:
 	r.b = _centre(c)
-	r.b_block = cell(c.x, c.y) == BLOCK
+	r.b_block = placed(c.x, c.y)
 	r.tied = true
 	if r not in ropes:
 		ropes.append(r)
@@ -786,7 +869,7 @@ func house_stands() -> bool:
 	var row := roundi(house_y)
 	for w in WHEELS:
 		var x := floori(house_x + w)
-		if cell(x, row) != BLOCK and not ground(x, row):
+		if not placed(x, row) and not ground(x, row):
 			return false
 	return true
 
@@ -821,7 +904,7 @@ func _ring() -> void:
 
 func _holding(r: Rock) -> bool:
 	for x in range(floori(r.pos.x), ceili(r.rect().end.x)):
-		if cell(x, roundi(r.pos.y) - 1) == BLOCK:
+		if placed(x, roundi(r.pos.y) - 1):
 			return true
 	return false
 
@@ -846,14 +929,14 @@ func _tick_house() -> void:
 		for w in WHEELS:
 			var x := floori(next + w + TREAD)
 			var c := cell(x, row)
-			if c == BLOCK and span_at(x, row) >= MAX_SPAN:
+			if placed(x, row) and span_at(x, row) >= span_limit(x, row):
 				_collapse(Vector2i(x, row))
 				house_state = BACKING
 				return
-			if c != BLOCK and not ground(x, row):
+			if not placed(x, row) and not ground(x, row):
 				_refuse(Vector2(x + 0.5, row + 0.5))
 				return
-			on_ground = on_ground and c != BLOCK
+			on_ground = on_ground and not placed(x, row)
 		house_x = next
 		if on_ground:
 			house_safe = next
@@ -874,7 +957,7 @@ func _collapse(start: Vector2i) -> void:
 	var todo: Array[Vector2i] = [start]
 	while not todo.is_empty():
 		var c: Vector2i = todo.pop_back()
-		if cell(c.x, c.y) != BLOCK or span_at(c.x, c.y) < MAX_SPAN:
+		if not placed(c.x, c.y) or span_at(c.x, c.y) < span_limit(c.x, c.y):
 			continue
 		cells[_i(c.x, c.y)] = AIR
 		paint.erase(_i(c.x, c.y))
@@ -893,19 +976,42 @@ func _lift() -> void:
 	strain.clear()
 	for group in _groups():
 		var white := 0
+		var heavy := 0
 		for c: Vector2i in group:
+			# Stone weighs double: a white stone still weighs one more block than it lifts.
+			var weight := 2 if cell(c.x, c.y) == STONE else 1
 			if paint.get(_i(c.x, c.y), PLAIN) == WHITE:
 				white += 1
-		if white == 0:
-			continue
+				weight -= 1
+			heavy += weight
 		var wheels := _wheels_on(group)
-		var heavy := group.size() - white + (HOUSE_LOAD if wheels > 0 else 0)
-		if white < heavy:
+		heavy += HOUSE_LOAD if wheels > 0 else 0
+		# With only one wheel on the group, the house's other wheel on the ground holds it down.
+		if white > 0 and white >= heavy and wheels != 1 and not _tethered(group):
+			_loosen(group, wheels == 2)
+			continue
+		if white > 0 and white < heavy:
 			for c: Vector2i in group:
 				strain[_i(c.x, c.y)] = float(white) / heavy
-		# With only one wheel on the group, the house's other wheel on the ground holds it down.
-		elif wheels != 1 and not _tethered(group):
-			_loosen(group, wheels == 2)
+		var drive := _engine(group)
+		if drive != 0 and wheels == 0 and not _tethered(group):
+			_loosen(group, false, drive)
+
+
+## Which way a group drives: a group with a wheel is a cart, and a yellow block in it is its engine,
+## facing the way Marta did as she painted it. Returns 0 for a group that doesn't drive.
+func _engine(group: Array) -> int:
+	var wheel := false
+	var engines := 0
+	var facing := 0
+	for c: Vector2i in group:
+		wheel = wheel or cell(c.x, c.y) == WHEEL
+		if paint.get(_i(c.x, c.y), PLAIN) == YELLOW:
+			engines += 1
+			facing += paint_dir.get(_i(c.x, c.y), 1)
+	if not wheel or engines == 0:
+		return 0
+	return 1 if facing >= 0 else -1
 
 
 ## Blocks joined side to side, or tied together with rope, make one group.
@@ -921,7 +1027,7 @@ func _groups() -> Array[Array]:
 	var groups: Array[Array] = []
 	for y in H:
 		for x in W:
-			if cells[_i(x, y)] != BLOCK or seen.has(_i(x, y)):
+			if not placed(x, y) or seen.has(_i(x, y)):
 				continue
 			var group: Array[Vector2i] = []
 			var todo: Array[Vector2i] = [Vector2i(x, y)]
@@ -933,7 +1039,7 @@ func _groups() -> Array[Array]:
 				for d: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
 					next.append(c + d)
 				for n: Vector2i in next:
-					if n.x >= 0 and n.x < W and n.y >= 0 and n.y < H and cells[_i(n.x, n.y)] == BLOCK \
+					if n.x >= 0 and n.x < W and n.y >= 0 and n.y < H and placed(n.x, n.y) \
 							and not seen.has(_i(n.x, n.y)):
 						seen[_i(n.x, n.y)] = true
 						todo.append(n)
@@ -949,8 +1055,9 @@ func _wheels_on(group: Array) -> int:
 	return n
 
 
-## Takes a group out of the grid to rise as one body, unless something stops it straight away.
-func _loosen(group: Array, rides: bool) -> void:
+## Takes a group out of the grid to rise, or to drive if it's a cart, unless something stops it
+## straight away.
+func _loosen(group: Array, rides: bool, drive := 0) -> void:
 	var b := Body.new()
 	var low := Vector2i(W, H)
 	var high := Vector2i(-1, -1)
@@ -960,17 +1067,26 @@ func _loosen(group: Array, rides: bool) -> void:
 	b.pos = Vector2(low)
 	b.size = Vector2(high - low + Vector2i.ONE)
 	b.house = rides
+	b.cart = drive != 0
+	b.dir = drive
 	for c: Vector2i in group:
 		b.cells.append(c - low)
+		b.kinds[c - low] = cells[_i(c.x, c.y)]
 		cells[_i(c.x, c.y)] = AIR
-	if not _can_move(b, Vector2(0, -RISE * DT), _riders(b)):
+	var riders := _riders(b)
+	var free := _can_move(b, Vector2(drive * CART_SPEED * DT, 0), riders) or _can_move(b, Vector2(0, STEP), riders) \
+			if b.cart else _can_move(b, Vector2(0, -RISE * DT), riders)
+	if not free:
 		for c: Vector2i in group:
-			cells[_i(c.x, c.y)] = BLOCK
+			cells[_i(c.x, c.y)] = b.kinds[c - low]
 		return
 	for c: Vector2i in group:
 		if paint.has(_i(c.x, c.y)):
 			b.paint[c - low] = paint[_i(c.x, c.y)]
 			paint.erase(_i(c.x, c.y))
+		if paint_dir.has(_i(c.x, c.y)):
+			b.dirs[c - low] = paint_dir[_i(c.x, c.y)]
+			paint_dir.erase(_i(c.x, c.y))
 	for r in ropes:
 		for end in ["a", "b"]:
 			if r.get(end + "_block") and r.tied and Vector2i(r.get(end).floor()) in group:
@@ -983,6 +1099,9 @@ func _tick_bodies() -> void:
 	for b: Body in bodies.duplicate():
 		# Once the house is up out of view, its lift has done its job and waits there.
 		if b.house and done:
+			continue
+		if b.cart:
+			_roll(b)
 			continue
 		var riders := _riders(b)
 		var d := Vector2(0, -RISE * DT)
@@ -1002,6 +1121,33 @@ func _tick_bodies() -> void:
 				untie(e[0])
 			bodies.erase(b)
 			_dirty = true
+
+
+## A cart falls when nothing holds it up, and drives the way its engine faces until something stops it.
+func _roll(b: Body) -> void:
+	b.vy = minf(b.vy + GRAVITY * DT, MAX_FALL)
+	var fell := _shift(b, Vector2(0, b.vy * DT))
+	if not fell:
+		b.vy = 0.0
+	var drove := _shift(b, Vector2(b.dir * CART_SPEED * DT, 0))
+	if not drove and not fell:
+		_settle(b)
+
+
+## Moves a body a short way in small steps, with its riders. Returns whether it moved at all.
+func _shift(b: Body, d: Vector2) -> bool:
+	var n := maxi(ceili(d.length() / STEP), 1)
+	var moved := false
+	for i in n:
+		var riders := _riders(b)
+		if not _can_move(b, d / n, riders):
+			break
+		b.pos += d / n
+		for o in riders:
+			o.pos += d / n
+		_move_ends(b)
+		moved = true
+	return moved
 
 
 ## Kids and rocks standing on top of the body, who go up with it.
@@ -1045,19 +1191,25 @@ func _can_move(b: Body, d: Vector2, riders: Array) -> bool:
 		for r in rocks:
 			if r not in riders and r.rect().intersects(box):
 				return false
+		# It waits for a kid in its way rather than pushing into them.
+		for k: Kid in [marta, giulio]:
+			if k not in riders and k.rect().intersects(box):
+				return false
 	return true
 
 
 ## Something stopped the body, so it drops back into the grid on the nearest row it fits.
 func _settle(b: Body) -> void:
 	var drop := ceilf(b.pos.y - 0.01) - b.pos.y
-	b.pos.y += drop
+	b.pos = Vector2(roundf(b.pos.x), b.pos.y + drop)
 	for c in b.cells:
 		var at := Vector2i(b.pos.round()) + c
 		if at.x >= 0 and at.x < W and at.y >= 0 and at.y < H and cells[_i(at.x, at.y)] == AIR:
-			cells[_i(at.x, at.y)] = BLOCK
+			cells[_i(at.x, at.y)] = b.kinds[c]
 			if b.paint.has(c):
 				paint[_i(at.x, at.y)] = b.paint[c]
+			if b.dirs.has(c):
+				paint_dir[_i(at.x, at.y)] = b.dirs[c]
 	if b.house:
 		house_y += drop
 	_move_ends(b)
@@ -1068,3 +1220,129 @@ func _settle(b: Body) -> void:
 func _move_ends(b: Body) -> void:
 	for e in b.ends:
 		e[0].set(e[1], b.pos + e[2])
+
+
+# ---- light ----------------------------------------------------------------------------------
+
+
+func light_at(x: int, y: int) -> float:
+	return light[_i(x, y)] if x >= 0 and x < W and y >= 0 and y < H else 1.0
+
+
+func marta_light_at(x: int, y: int) -> float:
+	return marta_light[_i(x, y)] if x >= 0 and x < W and y >= 0 and y < H else 1.0
+
+
+## In a stop with caves, a column that passes through one is dark from its roof down, and the cave is
+## lit only by daylight a little way in from its mouth and by yellow things, through open squares.
+func _light() -> void:
+	light.fill(1.0)
+	if not dark:
+		marta_light = light
+		return
+	for x in W:
+		var roof := H
+		for y in H:
+			if ground(x, y):
+				roof = y
+				break
+		var cave := false
+		for y in range(roof + 1, H):
+			cave = cave or not solid(x, y)
+		if cave:
+			for y in range(roof, H):
+				light[_i(x, y)] = 0.0
+	var mouth: Array[Vector2] = []
+	for y in H:
+		for x in W:
+			if light[_i(x, y)] == 1.0 and not solid(x, y):
+				for d: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.DOWN]:
+					if light_at(x + d.x, y + d.y) < 1.0 and not solid(x + d.x, y + d.y):
+						mouth.append(_centre(Vector2i(x, y)))
+						break
+	for at in mouth:
+		_flood(light, at, MOUTH_R)
+	for r in rocks:
+		if r.colour == YELLOW:
+			_flood(light, r.rect().get_center(), LIGHT_R)
+	for key: int in paint:
+		if paint[key] == YELLOW:
+			_flood(light, _centre(Vector2i(key % W, floori(float(key) / W))), LIGHT_R)
+	for b in bodies:
+		for c in b.cells:
+			if b.paint.get(c, PLAIN) == YELLOW:
+				_flood(light, b.pos + Vector2(c) + Vector2(0.5, 0.5), LIGHT_R)
+	marta_light = light.duplicate()
+	if cloak == YELLOW:
+		_flood(marta_light, marta.centre(), CLOAK_R)
+
+
+## Light from one point, fading over r squares. It spreads only through open squares, lighting the
+## walls it reaches but never passing through them.
+func _flood(out: PackedFloat32Array, at: Vector2, r: float) -> void:
+	var start := Vector2i(at.floor())
+	var seen := {start: true}
+	var todo: Array[Vector2i] = [start]
+	while not todo.is_empty():
+		var c: Vector2i = todo.pop_back()
+		if c.x < 0 or c.x >= W or c.y < 0 or c.y >= H:
+			continue
+		var d := at.distance_to(_centre(c))
+		if d > r:
+			continue
+		out[_i(c.x, c.y)] = maxf(out[_i(c.x, c.y)], 1.0 - d / (r + 1.0))
+		if solid(c.x, c.y) and c != start:
+			continue
+		for n: Vector2i in [c + Vector2i.LEFT, c + Vector2i.RIGHT, c + Vector2i.UP, c + Vector2i.DOWN]:
+			if not seen.has(n):
+				seen[n] = true
+				todo.append(n)
+
+
+# ---- sootlings ------------------------------------------------------------------------------
+
+
+func _tick_soots() -> void:
+	var him := giulio.centre()
+	var dark_him := _dim(him)
+	for s in soots:
+		var to := s.home
+		if not _dim(s.pos):
+			to = _darkest_near(s.pos)
+		elif dark_him and s.pos.distance_to(him) <= SOOT_SEE:
+			to = him
+		_drift(s, to)
+		if dark_him and s.pos.distance_to(him) < SOOT_REACH:
+			_wake(giulio)
+			events.append({"kind": "caught", "at": s.pos})
+
+
+## Whether a point is dark enough for a sootling: only daylight and yellow things count, not her cloak.
+func _dim(at: Vector2) -> bool:
+	return light_at(floori(at.x), floori(at.y)) <= SOOT_LIT
+
+
+## Moves towards a point through open, dark squares only, sliding along anything in the way.
+func _drift(s: Soot, to: Vector2) -> void:
+	var d := (to - s.pos).limit_length(SOOT_SPEED * DT)
+	for step: Vector2 in [d, Vector2(d.x, 0), Vector2(0, d.y)]:
+		var next := s.pos + step
+		var lit_now := not _dim(s.pos)
+		if not solid(floori(next.x), floori(next.y)) and (_dim(next) or lit_now):
+			s.pos = next
+			return
+
+
+## The darkest open square around, for a sootling caught in light to retreat to.
+func _darkest_near(at: Vector2) -> Vector2:
+	var best := at
+	var least := light_at(floori(at.x), floori(at.y))
+	for dy in range(-3, 4):
+		for dx in range(-3, 4):
+			var c := Vector2i(floori(at.x) + dx, floori(at.y) + dy)
+			if solid(c.x, c.y) or c.y < 0 or c.y >= H or c.x < 0 or c.x >= W:
+				continue
+			if light_at(c.x, c.y) < least:
+				least = light_at(c.x, c.y)
+				best = _centre(c)
+	return best

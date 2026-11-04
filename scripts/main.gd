@@ -42,6 +42,7 @@ var world_view: SubViewport
 var colour_ring: TextureRect
 var tool_ring: TextureRect
 var tool_strip: TextureRect
+var colour_strip: TextureRect
 var aim_strip: TextureRect
 var colour_key: TextureRect
 var tool_key: TextureRect
@@ -79,8 +80,11 @@ func _start() -> void:
 	refresh()
 
 
-## His strip grows with the tools a stop offers, and the keys beside it move along with its end.
+## The strips grow with the colours and tools a stop offers, and the keys beside them move along.
 func _lay_out_tools() -> void:
+	var colours := sim.colours.size()
+	colour_strip.texture = load("res://assets/gfx/strip_colours%s.png" % ("" if colours == 2 else "_%d" % colours))
+	colour_key.position = STRIP_AT + STRIP_KEY + Vector2(colour_strip.texture.get_width() - 196.0, 0)
 	var count := sim.tools.size()
 	tool_strip.texture = load("res://assets/gfx/strip_tools%s.png" % ("" if count == 2 else "_%d" % count))
 	var tools_at := STRIP_AT + Vector2(0, HALF.y + 18)
@@ -144,7 +148,7 @@ func _key(at: Vector2) -> TextureRect:
 
 func _hud() -> void:
 	var tools_at := STRIP_AT + Vector2(0, HALF.y + 18)
-	_image("res://assets/gfx/strip_colours.png", self, STRIP_AT)
+	colour_strip = _image("res://assets/gfx/strip_colours.png", self, STRIP_AT)
 	colour_ring = _image("res://assets/gfx/selected.png", self, Vector2.ZERO)
 	colour_key = _key(STRIP_AT + STRIP_KEY)
 	tool_strip = _image("res://assets/gfx/strip_tools.png", self, tools_at)
@@ -235,7 +239,7 @@ func refresh() -> void:
 	top_cam.position = night_cam.position
 	day_sky.position.x = -(day_cam.position.x - lo) * ZOOM * PARALLAX
 	night_sky.position.x = -(night_cam.position.x - lo) * ZOOM * PARALLAX
-	colour_ring.position = STRIP_AT + Vector2(SWATCH_X[sim.marta.colour - Sim.WHITE], 8)
+	colour_ring.position = STRIP_AT + Vector2(SWATCH_X[sim.colours.find(sim.marta.colour)], 8)
 	tool_ring.position = STRIP_AT + Vector2(SWATCH_X[sim.tools.find(sim.giulio.tool)], HALF.y + 18 + 8)
 	# The sun and moon close in across the whole road, so each stop moves them a little.
 	var start: float = Stops.ROAD[stop].house

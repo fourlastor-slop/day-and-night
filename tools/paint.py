@@ -461,7 +461,7 @@ def giulio(p, x, gy, f=1, coat=COAT, tool='hammer', scale=1.0):
         p.shape(rbox(X + dx * u - .03 * u, Y - .2 * u, X + dx * u + .2 * u, Y + 1, 4), BOOT, line=.6, shadow=.12, **S)
     # the tool behind the raised arm
     hx, hy = X + .66 * f * u, Y - 1.72 * u
-    if tool in ('hammer', 'pick'):
+    if tool in ('hammer', 'pick', 'stone'):
         p.line([[X + .22 * f * u, Y - .86 * u], [hx, hy]], WOOD_L, w=.1 * u, a=1, amp=.3, grain=False, painted=True)
     if tool == 'hammer':
         p.shape(rbox(hx - .3 * u, hy - .17 * u, hx + .3 * u, hy + .17 * u, 3), '#9aa3ad', line=.75, lw=1.8, shadow=.14, rim=.2,
@@ -471,6 +471,12 @@ def giulio(p, x, gy, f=1, coat=COAT, tool='hammer', scale=1.0):
         p.line(arc, '#9aa3ad', w=.13 * u, a=1, amp=.3, grain=False, painted=True)
     elif tool == 'rope':
         rope_coil(p, X + .5 * f * u, Y - 1.02 * u, .3 * u)
+    elif tool == 'wheel':
+        wheel(p, X + .5 * f * u, Y - 1.0 * u, .27 * u)
+    elif tool == 'stone':
+        p.shape(rbox(hx - .28 * u, hy - .22 * u, hx + .28 * u, hy + .22 * u, 2), '#b3afa6', line=.75, lw=1.8, shadow=.14, rim=.2,
+                painted=True, step=7)
+        p.line([[hx - .26 * u, hy], [hx + .26 * u, hy]], '#7b776f', w=.05 * u, a=.8, painted=True)
     pts = rbox(X - .4 * u, Y - 1.12 * u, X + .4 * u, Y - .16 * u, .2 * u)
     p.shape(pts, '#efe6d4', line=0, shadow=.22, rim=0, painted=True)
     p.shape(pts, coat, kind='crayon', line=.8, lw=2.1, shadow=0, rim=.08)

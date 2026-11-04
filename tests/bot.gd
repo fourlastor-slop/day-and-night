@@ -28,9 +28,8 @@ func road_rock() -> Sim.Rock:
 
 
 ## Lays planks along the road, one at a time. Returns false if he ever aims somewhere else.
-func build_deck(from: int, to: int) -> bool:
-	if sim.giulio.tool != Sim.HAMMER:
-		press(sim.giulio, "next_p")
+func build_deck(from: int, to: int, tool := Sim.HAMMER) -> bool:
+	hold(tool)
 	var ok := true
 	for x in range(from, to + 1):
 		walk(sim.giulio, x - 0.5)
@@ -93,11 +92,19 @@ func aim(at: Vector2i) -> bool:
 	return false
 
 
+## Switches his tool until he holds this one.
+func hold(tool: int) -> void:
+	var k := sim.giulio
+	for i in sim.tools.size():
+		if k.tool == tool:
+			return
+		press(k, "next_p")
+
+
 ## Digs a way into a mound with the pick, at his feet and then at his head, one square at a time.
 func tunnel(from: int, to: int) -> void:
 	var k := sim.giulio
-	if k.tool != Sim.PICK:
-		press(k, "next_p")
+	hold(Sim.PICK)
 	for x in range(from, to + 1):
 		walk(k, x - 0.5)
 		k.facing = 1
