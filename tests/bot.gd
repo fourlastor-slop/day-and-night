@@ -22,7 +22,7 @@ func clear_road() -> void:
 ## The first rock that starts out sitting on the road.
 func road_rock() -> Sim.Rock:
 	for r in sim.rocks:
-		if is_equal_approx(r.home.y + r.size.y, Sim.ROAD):
+		if is_equal_approx(r.home.y + r.size.y, sim.road):
 			return r
 	return null
 
@@ -35,7 +35,7 @@ func build_deck(from: int, to: int, tool := Sim.HAMMER) -> bool:
 		walk(sim.giulio, x - 0.5)
 		sim.giulio.facing = 1
 		run(2)
-		ok = ok and sim.giulio.target == Vector2i(x, Sim.ROAD)
+		ok = ok and sim.giulio.target == Vector2i(x, sim.road)
 		press(sim.giulio, "use_p")
 	walk(sim.giulio, from - 2.0)
 	return ok
@@ -73,6 +73,11 @@ func walk(k: Sim.Kid, x: float) -> void:
 		limit -= 1
 	k.pad.clear()
 	run(12)
+	# A hop over something can still be coming down: wait for the landing, as a kid would.
+	var landing := 60
+	while not k.grounded and landing > 0:
+		sim.tick()
+		landing -= 1
 
 
 ## Holds his aim button and steps the target onto a square. Returns false if it can't get there.
@@ -90,6 +95,27 @@ func aim(at: Vector2i) -> bool:
 		sim.tick()
 		k.pad.dir_p = Vector2i.ZERO
 	return false
+
+
+## Switches her brush until it's this colour.
+func brush(colour: int) -> void:
+	var m := sim.marta
+	for i in sim.colours.size():
+		if m.colour == colour:
+			return
+		press(m, "next_p")
+
+
+## Walks her up beside a rock and paints it.
+func paint_rock(r: Sim.Rock, colour: int) -> bool:
+	var left := sim.marta.pos.x < r.pos.x
+	walk(sim.marta, r.pos.x - 0.6 if left else r.rect().end.x + 0.6)
+	sim.marta.facing = 1 if left else -1
+	brush(colour)
+	run(2)
+	var ok := sim.marta.pick_rock == r
+	press(sim.marta, "use_p")
+	return ok
 
 
 ## Switches his tool until he holds this one.

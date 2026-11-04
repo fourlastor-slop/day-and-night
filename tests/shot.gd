@@ -18,6 +18,10 @@ func _ready() -> void:
 	await gully()
 	await river()
 	await cliff()
+	await mouth()
+	await rails()
+	await hall()
+	await tunnel()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_path))
 	get_tree().quit()
 
@@ -158,6 +162,150 @@ func cliff() -> void:
 	await shot("cliff-7-lifting", 2)
 	bot.run(400)
 	await shot("cliff-8-done")
+
+
+func mouth() -> void:
+	var sim := begin(Stops.MOUTH)
+	await shot("mouth-1-start")
+	bot.paint_rock(sim.rocks[0], Sim.YELLOW)
+	await shot("mouth-2-lit")
+	bot.tunnel(29, 30)
+	for at: Vector2i in [Vector2i(29, 9), Vector2i(29, 8), Vector2i(30, 9), Vector2i(30, 8)]:
+		bot.use_at(at)
+	bot.paint_rock(sim.rocks[1], Sim.YELLOW)
+	bot.build_deck(38, 43, Sim.CHISEL)
+	await shot("mouth-3-stone-over-the-pool")
+	for r in sim.rocks:
+		bot.paint_rock(r, Sim.WHITE)
+	bot.run(240)
+	await shot("mouth-4-stones-floated")
+	bot.drive()
+	await shot("mouth-5-done")
+
+
+func rails() -> void:
+	var sim := begin(Stops.RAILS)
+	await shot("rails-1-start")
+	var boulder := sim.rocks[0]
+	bot.paint_rock(boulder, Sim.WHITE)
+	bot.run(300)
+	bot.drive()
+	await shot("rails-2-jammed", 20)
+	var k := sim.giulio
+	bot.hold(Sim.WHEEL_TOOL)
+	for x in [19, 23]:
+		bot.walk(k, x - 1.5)
+		bot.use_at(Vector2i(x, 11))
+	bot.hold(Sim.HAMMER)
+	bot.walk(k, 18.5)
+	for x in [19, 20, 21]:
+		bot.use_at(Vector2i(x, 10))
+	bot.walk(k, 24.5)
+	for x in [23, 22]:
+		bot.use_at(Vector2i(x, 10))
+	bot.walk(k, 12.0)
+	await shot("rails-3-cart-under-it")
+	var m := sim.marta
+	bot.walk(m, 23.2)
+	m.facing = -1
+	m.pad.jump_p = true
+	m.pad.jump = true
+	sim.tick()
+	m.pad.jump_p = false
+	for i in 40:
+		if m.pick_rock == boulder:
+			m.pad.alt_p = true
+			sim.tick()
+			m.pad.alt_p = false
+			break
+		sim.tick()
+	m.pad.clear()
+	bot.run(120)
+	m.facing = 1
+	bot.brush(Sim.YELLOW)
+	bot.run(2)
+	bot.press(m, "use_p")
+	bot.run(240)
+	await shot("rails-4-carting", 2)
+	bot.run(600)
+	bot.drive()
+	await shot("rails-5-done")
+
+
+func hall() -> void:
+	var sim := begin(Stops.HALL)
+	await shot("hall-1-start")
+	var k := sim.giulio
+	var m := sim.marta
+	bot.hold(Sim.CHISEL)
+	bot.brush(Sim.YELLOW)
+	for x in range(24, 36):
+		bot.walk(k, x - 0.5)
+		k.facing = 1
+		bot.run(2)
+		bot.press(k, "use_p")
+		if x == 29:
+			bot.use_at(Vector2i(29, 13))
+			bot.use_at(Vector2i(29, 13))
+		if x % 2 == 0:
+			bot.walk(m, x + 0.5)
+			bot.run(2)
+			bot.press(m, "use_p")
+		if x == 30:
+			await shot("hall-2-yellow-blocks", 2)
+	await shot("hall-3-bridged")
+	bot.walk(k, 14.0)
+	bot.walk(m, 14.0)
+	bot.drive()
+	await shot("hall-4-done")
+
+
+func tunnel() -> void:
+	var sim := begin(Stops.TUNNEL)
+	await shot("tunnel-1-start")
+	bot.paint_rock(sim.rocks[0], Sim.YELLOW)
+	bot.tunnel(20, 21)
+	for at: Vector2i in [Vector2i(20, 9), Vector2i(20, 8), Vector2i(21, 9), Vector2i(21, 8)]:
+		bot.use_at(at)
+	bot.build_deck(24, 29, Sim.CHISEL)
+	bot.paint_rock(sim.rocks[1], Sim.YELLOW)
+	await shot("tunnel-2-across-the-pool")
+	var k := sim.giulio
+	bot.hold(Sim.WHEEL_TOOL)
+	bot.walk(k, 33.0)
+	k.facing = 1
+	for x in [34, 36]:
+		bot.use_at(Vector2i(x, 11))
+	bot.hold(Sim.HAMMER)
+	for x in [34, 35, 36]:
+		bot.use_at(Vector2i(x, 10))
+	var m := sim.marta
+	bot.walk(m, 36.2)
+	m.facing = 1
+	bot.brush(Sim.YELLOW)
+	bot.run(2)
+	bot.press(m, "use_p")
+	for i in 120:
+		var cart_x := sim.bodies[0].pos.x if not sim.bodies.is_empty() else 43.0
+		k.pad.x = 1 if k.pos.x < cart_x - 0.6 else 0
+		sim.tick()
+	await shot("tunnel-3-lamp-cart", 2)
+	for i in 120:
+		var cart_x := sim.bodies[0].pos.x if not sim.bodies.is_empty() else 43.0
+		k.pad.x = 1 if k.pos.x < cart_x - 0.6 else 0
+		sim.tick()
+	k.pad.clear()
+	bot.walk(k, 44.5)
+	bot.hold(Sim.PICK)
+	for x in [46, 47]:
+		for y in range(8, 12):
+			bot.use_at(Vector2i(x, y))
+	bot.run(600)
+	for r in sim.rocks:
+		bot.paint_rock(r, Sim.WHITE)
+	bot.run(300)
+	bot.drive()
+	await shot("tunnel-4-done")
 
 
 ## Marta walks along the platform painting its blocks white until that many are.

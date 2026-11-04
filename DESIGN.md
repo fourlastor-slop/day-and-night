@@ -6,7 +6,7 @@ A side-view co-op adventure for two players at one computer: Marta, who loves dr
 building. They're kids of different ages and both are smart, so challenges must be real challenges: hard, but
 never impossible.
 
-Working title. This is a draft. The Meadow exists as a prototype, and the rest is untested.
+Working title. This is a draft. The Meadow and the Old Mines exist as a prototype, and the rest is untested.
 
 ## The hook
 
@@ -52,7 +52,8 @@ show at night. Each player sees the other as a faint glow, so they can find each
 Darkness is an event, not the default, because constant darkness would get old quickly. Only caves are dark: any
 open space with ground somewhere above it. Light spreads only through open space, so it never leaks through a wall.
 Her yellow cloak lights her own way, in her half of the screen only, but he has no light of his own, so he can only
-get through if she paints the loose stones in the cave yellow.
+get through if she paints the loose stones in the cave yellow. Paint still shows faintly in the dark, so a painted rock
+never just vanishes.
 
 ### Fitting half the screen
 
@@ -85,7 +86,7 @@ facing, lights up to show what she'll paint, and one button does it.
 |---|---|---|---|
 | Cloud white | Floats | Rises until something stops it, and holds up what's resting on it. A connected group rises if it has at least as much white as plain, with the house on it weighing as much as 4 plain blocks | Glide |
 | Fire red | Warm | Melts nearby ice and snow. A stone painted red is a furnace | Cross snow |
-| Ice blue | Cold | Freezes nearby water, cools nearby lava into rock, and slides | Cross hot ground |
+| Ice blue | Cold | Freezes nearby water, cools nearby lava into rock, and slides, unless it's a boulder too heavy to shove | Cross hot ground |
 | Lightning yellow | Shines | Lights up dark caves, keeps sootlings away, powers machines | Carry a light |
 | Leaf green (blue + yellow) | Grows | Saplings and vines grow slowly, towards light | To be decided |
 | Bubblegum pink (red + white) | Bounces | Anything landing on it bounces | Higher jump |
@@ -202,9 +203,9 @@ Who has the harder job alternates, and the two jobs connect at least once in eve
 | The River | twist | Marta | Wood can't stand in the river and its rocks are under the surface, so she floats them up under his deck |
 | The Cliff Lift | land's end | both | He ties his platform to the old pulley's ropes, the house drives on, and she paints enough of it white to lift the house up the cliff |
 | The Mine Mouth | teach | Giulio | Dark inside: she lights loose stones yellow so he can see. Rubble only he can dig, and a pool where wood breaks but stone holds |
-| The Old Rails | use | Marta | A boulder in a low tunnel: white jams it on the ceiling, so he builds a cart under it, she drops it on, and a yellow block drives it away |
+| The Old Rails | use | Marta | A boulder too heavy to shove: white jams it against the roof, so he builds a cart under it, she drops it on, and a yellow block at the cart's front drives it out past where the house stops |
 | The Sootling Hall | twist | Giulio | A dark hall over deep water with no loose stones: he builds, and she paints his own blocks yellow to keep the sootlings off |
-| The Long Tunnel | land's end | both | Everything the mines taught, along one old gallery out to the daylight |
+| The Long Tunnel | land's end | both | Lamp stones, rubble, a pool only stone spans, and sootlings in the dark beyond, where a cart with a yellow engine lights the way and waits while he digs the last rubble |
 
 ## Needing each other
 

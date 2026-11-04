@@ -10,6 +10,7 @@ const NIGHT_TOP := 4
 const EVERY := SHARED | DAY | NIGHT_TOP
 const FX_LIFE := 90
 const STOP_LIFE := 150
+const SMOOTH := 4
 const SHUDDER := 30
 const USE_HOLD := 10
 
@@ -22,10 +23,9 @@ const BLOCK_CELL := 64.0
 const EARTH_ROWS := 5
 const EARTH_BASE := Color("937c63")
 const ROCK_BASE := Color("8f8d86")
+const CAVE_SHADE := Color(0.18, 0.15, 0.13, 0.55)
 const ROPE_DARK := Color("6d5233")
 const ROPE_LIGHT := Color("c9a066")
-## Ground above the top of the house's body draws in front of it, so its flag goes behind a shelf.
-const ROOF := Sim.ROAD - int(Sim.HOUSE_H)
 
 
 ## The tile grid, from row top down to row bottom.
@@ -47,11 +47,15 @@ class Ground extends Node2D:
 				var c := sim.cell(x, y)
 				if c == Sim.EARTH or c == Sim.ROCK:
 					draw_rect(Rect2(x * B, y * B, B, B), EARTH_BASE if c == Sim.EARTH else ROCK_BASE)
+				elif sim.in_cave(x, y):
+					# Inside the mountain the back of the cave shows, not the sky.
+					_cell(cliff, x, y, Rect2(((x * 7 + y * 3) % 5 % 3) * BLOCK_CELL, 0, BLOCK_CELL, BLOCK_CELL))
+					draw_rect(Rect2(x * B, y * B, B, B), CAVE_SHADE)
 		for y in range(top, bottom):
 			for x in Sim.W:
 				var col := (x * 7 + y * 3) % 5 % 3
 				if sim.cell(x, y) == Sim.EARTH:
-					var row := mini(y - Sim.ROAD, EARTH_ROWS - 1) if y >= Sim.ROAD else 0
+					var row := mini(y - sim.road, EARTH_ROWS - 1) if y >= sim.road else 0
 					_cell(earth, x, y, Rect2(col * BLOCK_CELL, row * BLOCK_CELL, BLOCK_CELL, BLOCK_CELL))
 				elif sim.cell(x, y) == Sim.ROCK:
 					_cell(cliff, x, y, Rect2(col * BLOCK_CELL, 0, BLOCK_CELL, BLOCK_CELL))
@@ -176,19 +180,24 @@ class Darkness extends Sprite2D:
 
 	func _init() -> void:
 		centered = false
-		scale = Vector2(B, B)
+		# Worked out per square, then smoothed up to four pixels a square so light fades round.
+		scale = Vector2(B, B) / SMOOTH
 		texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-		texture = ImageTexture.create_from_image(image)
+		var big := image.duplicate()
+		big.resize(Sim.W * SMOOTH, Sim.H * SMOOTH, Image.INTERPOLATE_CUBIC)
+		texture = ImageTexture.create_from_image(big)
 
 	func refresh() -> void:
 		visible = sim.dark
 		if not visible:
 			return
-		var lit := sim.marta_light if for_marta else sim.light
+		var lit := sim.cloak_light() if for_marta else sim.light
 		for y in Sim.H:
 			for x in Sim.W:
 				image.set_pixel(x, y, Color(shade, (1.0 - lit[y * Sim.W + x]) * 0.94))
-		(texture as ImageTexture).update(image)
+		var big := image.duplicate()
+		big.resize(Sim.W * SMOOTH, Sim.H * SMOOTH, Image.INTERPOLATE_CUBIC)
+		(texture as ImageTexture).update(big)
 
 
 ## One kid's cues, on that kid's half of the screen only, because their keys are different.
@@ -205,6 +214,7 @@ var ground: Ground
 var overhead: Ground
 var frost: Frost
 var rocks: Array[Sprite2D] = []
+var ghosts: Array[Sprite2D] = []
 var wisps: Array[Sprite2D] = []
 var house: Sprite2D
 var wheels: Array[Sprite2D] = []
@@ -250,16 +260,22 @@ func _init(world: Sim) -> void:
 	visibility_layer = EVERY
 	ground = Ground.new()
 	ground.sim = sim
-	ground.top = ROOF
+	# Ground above the top of the house's body draws in front of it, so its flag goes behind a shelf.
+	var roof := sim.road - int(Sim.HOUSE_H)
+	ground.top = roof
 	add_child(ground)
 	overhead = Ground.new()
 	overhead.sim = sim
-	overhead.bottom = ROOF
+	overhead.bottom = roof
 	overhead.z_index = 5
 	add_child(overhead)
 	for r in sim.rocks:
 		wisps.append(_sprite("res://assets/gfx/wisp.png", 1))
 		rocks.append(_sprite("res://assets/gfx/rock_plain.png", 1))
+		# Paint shows faintly through a cave's dark, so a painted rock never just vanishes.
+		var faint := _sprite("res://assets/gfx/rock_plain.png", 7, DAY | NIGHT_TOP)
+		faint.modulate.a = 0.5
+		ghosts.append(faint)
 	var water := Water.new()
 	water.sim = sim
 	water.z_index = 2
@@ -374,6 +390,11 @@ func sync() -> void:
 		var r: Sim.Rock = sim.rocks[i]
 		rocks[i].texture = rock_tex[r.colour]
 		rocks[i].position = r.rect().get_center() * B
+		rocks[i].scale = Vector2.ONE * r.size.x / 2.0
+		ghosts[i].visible = sim.dark and r.colour != Sim.PLAIN
+		ghosts[i].texture = rocks[i].texture
+		ghosts[i].position = rocks[i].position
+		ghosts[i].scale = rocks[i].scale
 		# Paint stays bright through the water.
 		rocks[i].z_index = 1 if r.colour == Sim.PLAIN else 3
 		wisps[i].z_index = rocks[i].z_index

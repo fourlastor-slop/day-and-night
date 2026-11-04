@@ -85,8 +85,8 @@ func count_blocks() -> int:
 func max_span() -> int:
 	var worst := 0
 	for x in Sim.W:
-		if sim.cell(x, Sim.ROAD) == Sim.BLOCK:
-			worst = maxi(worst, sim.span_at(x, Sim.ROAD))
+		if sim.placed(x, sim.road):
+			worst = maxi(worst, sim.span_at(x, sim.road))
 	return worst
 
 

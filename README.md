@@ -6,7 +6,8 @@ A side-view co-op game for two kids at one computer, made in Godot 4.7 (GDScript
 top, Giulio's night below, both showing the same world at the same time. Whatever one does appears in the other's half
 straight away. [DESIGN.md](DESIGN.md) has the whole idea.
 
-This is a prototype of the Meadow, the first land: the Brook, the Gully, the River and the Cliff Lift.
+This is a prototype of the first two lands: the Meadow (the Brook, the Gully, the River and the Cliff Lift) and the Old
+Mines (the Mine Mouth, the Old Rails, the Sootling Hall and the Long Tunnel).
 
 ## Play it
 
@@ -37,7 +38,9 @@ at the bell on its back end, where it rings. If the house can't go, it shudders 
 stopped it.
 
 At the Cliff Lift Giulio's tools include a rope. Aim at one end and press his use key, then aim at the other end and press
-it again. Pressing it on a rope's end unties it.
+it again. Pressing it on a rope's end unties it. In the mines Marta has yellow as well, and her yellow cloak lights her own
+way, while Giulio's tools grow to hammer, stone, pick, rope and wheel. Any of his building tools takes out what it's aimed
+at.
 
 ## What's in the prototype
 
@@ -49,12 +52,21 @@ it again. Pressing it on a rope's end unties it.
 - **The house:** it refuses a gap, breaks a bridge that can't hold it, and rolls back to safety. What its wheels rest on
   can't be dug out. It weighs as much as 4 plain blocks, so a lift needs that much more white to carry it.
 - **The bell:** it brings back lost rocks, and leaves any that are holding up a plank or that the house has reached.
-- **The road:** four stops, each a text map in `scripts/core/stops.gd`, played in order. Progress is saved in
+- **The road:** eight stops, each a text map in `scripts/core/stops.gd`, played in order. Progress is saved in
   `user://progress.cfg`.
+- **Caves:** in the mines, any open space with ground above it is dark. Daylight reaches a little way in at a mouth, and
+  yellow rocks and blocks light the space around them, through open space only. Painted rocks show faintly in the dark.
+- **Stone:** his second block kind. A run of it reaches 5 squares from a support, it sinks to the bottom of water and
+  stands there, and it weighs double in a lift.
+- **Carts:** a group of blocks with a wheel in it is a cart, and a yellow block in it is the engine, driving the way Marta
+  faced when she painted it. Carts fall, carry what rides them, and wait when something is in the way.
+- **Sootlings:** shy shadows in the mines' dark. They drift towards Giulio there and never go into light. One that
+  touches him in the dark wakes him in the house.
+- **Boulders:** three squares across, too heavy to shove even on blue, though white still lifts them.
 - **Rock:** ground the pick can't dig, which holds up planks the way earth does. It makes the Gully's shelf and cliff.
 
-Not in yet: the Old Mines, playing alone, her cloak, mixing, the easel, more tools and block kinds, caves, creatures and
-sound.
+Not in yet: the later lands, playing alone, choosing her cloak's colour, mixing, the easel, the mole and other helping
+creatures, side goals and sound.
 
 ## What's in the box
 

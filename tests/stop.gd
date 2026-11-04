@@ -2,7 +2,7 @@ extends Node
 ## Plays every stop with bots driving the real tick(), and fails on anything that breaks a puzzle: the
 ## obvious answer has to fail, and the two kids together have to get through.
 
-const CASES := ["controls", "rules", "lifts", "ropes", "light", "stone", "carts", "soots", "brook", "gully", "river", "cliff"]
+const CASES := ["controls", "rules", "lifts", "ropes", "light", "stone", "carts", "soots", "brook", "gully", "river", "cliff", "mouth", "rails", "hall", "tunnel"]
 
 
 func _ready() -> void:

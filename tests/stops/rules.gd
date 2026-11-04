@@ -7,6 +7,7 @@ func run() -> void:
 	rock_is_ground_the_pick_cant_dig()
 	the_house_drives_on_rock()
 	the_bell_brings_back_a_rock_the_house_is_waiting_at()
+	a_boulder_is_too_heavy_to_shove()
 
 
 ## Walking into a mound with the pick digs what's in front of him, feet first and then head, so he
@@ -64,3 +65,23 @@ func the_bell_brings_back_a_rock_the_house_is_waiting_at() -> void:
 	bot.press(sim.giulio, "interact_p")
 	bot.run(5)
 	check(rock.pos.is_equal_approx(rock.home), "the bell brings it back")
+
+
+## Three squares across instead of two, a boulder won't slide even on blue, though white still lifts it.
+func a_boulder_is_too_heavy_to_shove() -> void:
+	var stop := LiftCase.flat()
+	var map: Array = stop.map.duplicate()
+	map[7] = map[7].substr(0, 30) + "Aaa" + map[7].substr(33)
+	map[8] = map[8].substr(0, 30) + "aaa" + map[8].substr(33)
+	map[9] = map[9].substr(0, 30) + "aaa" + map[9].substr(33)
+	stop.map = map
+	fresh(stop)
+	var boulder := sim.rocks[0]
+	check(boulder.size == Vector2(3, 3), "a 3 by 3 block of letters makes a boulder")
+	boulder.colour = Sim.BLUE
+	bot.walk(sim.marta, 32.0)
+	bot.run(60)
+	check(boulder.pos == boulder.home, "blue doesn't make it slide when she shoves it")
+	boulder.colour = Sim.WHITE
+	bot.run(60)
+	check(boulder.pos.y < boulder.home.y - 1.0, "but white lifts it")

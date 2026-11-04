@@ -53,7 +53,7 @@ const MAX_ROPE := 8.0
 const CART_SPEED := 3.0
 const SOOT_SPEED := 2.4
 ## How far a sootling sees him, how much light it won't go into, and how close counts as touching.
-const SOOT_SEE := 6.0
+const SOOT_SEE := 8.0
 const SOOT_LIT := 0.3
 const SOOT_REACH := 0.7
 const LIGHT_R := 4.0
@@ -176,10 +176,12 @@ var cloak := PLAIN
 var paint_dir := {}
 ## Whether this stop has caves, which are dark.
 var dark := false
-## How lit each square is, from 0 to 1: by daylight and yellow things for Giulio, and by her own cloak
-## as well for Marta.
+## How lit each square is, from 0 to 1, by daylight and yellow things. Marta also has her cloak's own
+## glow, which cloak_light() adds.
 var light := PackedFloat32Array()
-var marta_light := PackedFloat32Array()
+var _light_key := 0
+## For each column that passes through a cave, the row of its roof.
+var _cave_cols := {}
 ## Pictures that belong to the stop but play no part in it, like the pulley's crane.
 var decor: Array = []
 ## How close each block in a white group is to lifting it, from 0 to 1, for groups that can't yet.
@@ -187,6 +189,8 @@ var strain := {}
 var marta: Kid
 var giulio: Kid
 var house_x := 3.0
+## The row the road runs along at this stop, where the house's wheels and the kids' feet start.
+var road := ROAD
 var house_y := float(ROAD)
 var house_safe := 3.0
 var house_state := PARKED
@@ -205,6 +209,7 @@ func _init(stop: Dictionary) -> void:
 	ice.resize(W * H)
 	span.resize(W * H)
 	surface.resize(W)
+	road = stop.get("road", ROAD)
 	var map: Array = stop.map
 	assert(map.size() == H, "%s needs %d rows" % [name, H])
 	var tops := {}
@@ -228,7 +233,17 @@ func _init(stop: Dictionary) -> void:
 	var letters := tops.keys()
 	letters.sort()
 	for c: String in letters:
-		rocks.append(Rock.new(tops[c]))
+		var r := Rock.new(tops[c])
+		# A rock is as big as its letters: A with a to its right and below, 2 squares or a boulder's 3.
+		var at: Vector2i = Vector2i(tops[c])
+		var w := 1
+		while at.x + w < W and map[at.y][at.x + w] == c.to_lower():
+			w += 1
+		var h := 1
+		while at.y + h < H and map[at.y + h][at.x] == c.to_lower():
+			h += 1
+		r.size = Vector2(w, h)
+		rocks.append(r)
 	for x in W:
 		surface[x] = -1
 		for y in H:
@@ -245,12 +260,12 @@ func _init(stop: Dictionary) -> void:
 	cloak = COLOURS.get(stop.get("cloak", ""), PLAIN)
 	dark = stop.get("dark", false)
 	light.resize(W * H)
-	marta_light.resize(W * H)
+	house_y = road
 	house_x = stop.house
 	house_safe = house_x
 	goal = stop.goal
-	marta = Kid.new(Vector2(stop.marta, ROAD))
-	giulio = Kid.new(Vector2(stop.giulio, ROAD))
+	marta = Kid.new(Vector2(stop.marta, road))
+	giulio = Kid.new(Vector2(stop.giulio, road))
 	giulio.height = 1.6
 	giulio.jump_v = 14.4
 	giulio.wake = 5.0
@@ -261,7 +276,7 @@ func _hang(x: int) -> void:
 	var r := Rope.new()
 	r.hook = true
 	r.a = Vector2(x + 0.5, -1.0)
-	r.rest = Vector2(x + 0.5, ROAD - 0.5)
+	r.rest = Vector2(x + 0.5, road - 0.5)
 	r.b = r.rest
 	ropes.append(r)
 
@@ -391,8 +406,19 @@ func _tick_rocks() -> void:
 			else:
 				r.vx = move_toward(r.vx, 0.0, (SLIDE_DRAG if _slides(r) else 40.0) * DT)
 		if r.pos != before:
-			_dirty = true
+			# A moving rock only matters to his blocks if it's up against one.
+			if _near_blocks(r):
+				_dirty = true
 			_carry(r, before)
+
+
+func _near_blocks(r: Rock) -> bool:
+	var box := r.rect().grow(1.0)
+	for y in range(floori(box.position.y), ceili(box.end.y)):
+		for x in range(floori(box.position.x), ceili(box.end.x)):
+			if placed(x, y):
+				return true
+	return false
 
 
 func _rock_move(r: Rock, d: Vector2) -> bool:
@@ -430,7 +456,10 @@ func _pinned(r: Rock) -> bool:
 	return false
 
 
+## Whether a shove sends this rock sliding. A boulder is too heavy to shove, even on blue.
 func _slides(r: Rock) -> bool:
+	if r.size.x > 2:
+		return false
 	if r.colour == BLUE:
 		return true
 	var y := ceili(r.rect().end.y)
@@ -519,7 +548,7 @@ func _kid_y(k: Kid, d: float) -> void:
 ## Falling or getting caught costs time, never progress: you wake up where the house last stood on
 ## solid ground, which is never over water, and on top of anything built there.
 func _wake(k: Kid) -> void:
-	k.pos = Vector2(house_safe + k.wake, ROAD)
+	k.pos = Vector2(house_safe + k.wake, road)
 	while _tiles_hit(k.rect()):
 		k.pos.y -= 1.0
 	k.vel = Vector2.ZERO
@@ -684,30 +713,33 @@ func _stress() -> void:
 	_dirty = false
 	revision += 1
 	span.fill(FREE)
-	for y in H:
+	# Only the placed blocks, from the bottom up, so the count settles in a few passes.
+	var blocks: Array[Vector2i] = []
+	for y in range(H - 1, -1, -1):
 		for x in W:
-			if not placed(x, y):
-				continue
-			if _held(x, y):
-				span[_i(x, y)] = 0
-			elif ground(x - 1, y) or ground(x + 1, y):
-				span[_i(x, y)] = 1
+			var c := cells[_i(x, y)]
+			if c == BLOCK or c == STONE or c == WHEEL:
+				blocks.append(Vector2i(x, y))
+	for b in blocks:
+		if _held(b.x, b.y):
+			span[_i(b.x, b.y)] = 0
+		elif ground(b.x - 1, b.y) or ground(b.x + 1, b.y):
+			span[_i(b.x, b.y)] = 1
 	var changed := true
 	while changed:
 		changed = false
-		for y in range(H - 1, -1, -1):
-			for x in W:
-				if not placed(x, y):
-					continue
-				var best := span[_i(x, y)]
-				for side in [-1, 1]:
-					if placed(x + side, y):
-						best = mini(best, span[_i(x + side, y)] + 1)
-				if placed(x, y + 1):
-					best = mini(best, span[_i(x, y + 1)])
-				if best < span[_i(x, y)]:
-					span[_i(x, y)] = best
-					changed = true
+		for b in blocks:
+			var i := _i(b.x, b.y)
+			var best := span[i]
+			if placed(b.x - 1, b.y):
+				best = mini(best, span[i - 1] + 1)
+			if placed(b.x + 1, b.y):
+				best = mini(best, span[i + 1] + 1)
+			if placed(b.x, b.y + 1):
+				best = mini(best, span[_i(b.x, b.y + 1)])
+			if best < span[i]:
+				span[i] = best
+				changed = true
 
 
 func _held(x: int, y: int) -> bool:
@@ -853,7 +885,7 @@ func near_bell(k: Kid) -> bool:
 ## What the wheels rest on, here and where the house would roll back to. It stays put, because a house
 ## with nothing under it has no way back up.
 func bearing(c: Vector2i) -> bool:
-	for spot: Vector2 in [Vector2(house_x, house_y), Vector2(house_safe, ROAD)]:
+	for spot: Vector2 in [Vector2(house_x, house_y), Vector2(house_safe, road)]:
 		if c.y != roundi(spot.y):
 			continue
 		for w in WHEELS:
@@ -882,8 +914,9 @@ func riding() -> bool:
 	return false
 
 
+## Inset a little on every side, so a rock floated up against a roof just over it doesn't count as touching.
 func _house_body(x: float) -> Rect2:
-	return Rect2(x + 0.1, house_y - HOUSE_H, HOUSE_W - 0.2, HOUSE_H - 0.1)
+	return Rect2(x + 0.1, house_y - HOUSE_H + 0.1, HOUSE_W - 0.2, HOUSE_H - 0.2)
 
 
 ## The bell puts loose rocks back, so nothing can be lost for good. One holding up a plank is doing
@@ -1019,32 +1052,43 @@ func _groups() -> Array[Array]:
 	var links := {}
 	for r in ropes:
 		if r.tied and r.a_block and r.b_block:
-			var a := Vector2i(r.a.floor())
-			var b := Vector2i(r.b.floor())
+			var a := _i(floori(r.a.x), floori(r.a.y))
+			var b := _i(floori(r.b.x), floori(r.b.y))
 			links[a] = links.get(a, []) + [b]
 			links[b] = links.get(b, []) + [a]
-	var seen := {}
+	var seen := PackedByteArray()
+	seen.resize(W * H)
 	var groups: Array[Array] = []
-	for y in H:
-		for x in W:
-			if not placed(x, y) or seen.has(_i(x, y)):
-				continue
-			var group: Array[Vector2i] = []
-			var todo: Array[Vector2i] = [Vector2i(x, y)]
-			seen[_i(x, y)] = true
-			while not todo.is_empty():
-				var c: Vector2i = todo.pop_back()
-				group.append(c)
-				var next: Array = links.get(c, [])
-				for d: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
-					next.append(c + d)
-				for n: Vector2i in next:
-					if n.x >= 0 and n.x < W and n.y >= 0 and n.y < H and placed(n.x, n.y) \
-							and not seen.has(_i(n.x, n.y)):
-						seen[_i(n.x, n.y)] = true
-						todo.append(n)
-			groups.append(group)
+	for start in W * H:
+		if seen[start] == 1 or not _placed_at(start):
+			continue
+		var group: Array[Vector2i] = []
+		var todo: Array[int] = [start]
+		seen[start] = 1
+		while not todo.is_empty():
+			var i: int = todo.pop_back()
+			var x := i % W
+			group.append(Vector2i(x, (i - x) / W))
+			var next: Array = links.get(i, []).duplicate()
+			if x > 0:
+				next.append(i - 1)
+			if x < W - 1:
+				next.append(i + 1)
+			if i >= W:
+				next.append(i - W)
+			if i < W * (H - 1):
+				next.append(i + W)
+			for n: int in next:
+				if seen[n] == 0 and _placed_at(n):
+					seen[n] = 1
+					todo.append(n)
+		groups.append(group)
 	return groups
+
+
+func _placed_at(i: int) -> bool:
+	var c := cells[i]
+	return c == BLOCK or c == STONE or c == WHEEL
 
 
 func _wheels_on(group: Array) -> int:
@@ -1230,15 +1274,44 @@ func light_at(x: int, y: int) -> float:
 
 
 func marta_light_at(x: int, y: int) -> float:
-	return marta_light[_i(x, y)] if x >= 0 and x < W and y >= 0 and y < H else 1.0
+	return cloak_light()[_i(x, y)] if x >= 0 and x < W and y >= 0 and y < H else 1.0
+
+
+## What Marta sees by: the same light, with her yellow cloak's glow around her. Only her half of the
+## screen needs it, so it's worked out when asked for rather than every tick.
+## Whether an open square is inside a cave: in a stop with caves, under the roof of a column that
+## passes through one. The view draws a back wall there.
+func in_cave(x: int, y: int) -> bool:
+	return dark and _cave_cols.has(x) and y > _cave_cols[x] and not solid(x, y)
+
+
+func cloak_light() -> PackedFloat32Array:
+	if not dark or cloak != YELLOW:
+		return light
+	var out := light.duplicate()
+	_flood(out, marta.centre(), CLOAK_R)
+	return out
 
 
 ## In a stop with caves, a column that passes through one is dark from its roof down, and the cave is
 ## lit only by daylight a little way in from its mouth and by yellow things, through open squares.
 func _light() -> void:
+	var key := [cells, ice, paint]
+	for r in rocks:
+		if r.colour == YELLOW:
+			key.append(r.pos)
+	for b in bodies:
+		key.append(b.pos)
+	# Worked out again only when the grid, a yellow rock or a moving group changes. Her cloak moves
+	# with her, so it goes on top every tick.
+	if hash(key) != _light_key:
+		_light_key = hash(key)
+		_light_up()
+
+
+func _light_up() -> void:
 	light.fill(1.0)
 	if not dark:
-		marta_light = light
 		return
 	for x in W:
 		var roof := H
@@ -1249,19 +1322,34 @@ func _light() -> void:
 		var cave := false
 		for y in range(roof + 1, H):
 			cave = cave or not solid(x, y)
+		_cave_cols.erase(x)
 		if cave:
+			_cave_cols[x] = roof
 			for y in range(roof, H):
 				light[_i(x, y)] = 0.0
-	var mouth: Array[Vector2] = []
+	# Daylight reaches a few squares in from a cave's mouth, spreading from every lit open square
+	# next to the dark at once.
+	var reach := {}
+	var todo: Array[Vector2i] = []
 	for y in H:
 		for x in W:
-			if light[_i(x, y)] == 1.0 and not solid(x, y):
-				for d: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.DOWN]:
-					if light_at(x + d.x, y + d.y) < 1.0 and not solid(x + d.x, y + d.y):
-						mouth.append(_centre(Vector2i(x, y)))
-						break
-	for at in mouth:
-		_flood(light, at, MOUTH_R)
+			if light[_i(x, y)] == 1.0 and not solid(x, y) and _beside_dark(x, y):
+				reach[Vector2i(x, y)] = 0
+				todo.append(Vector2i(x, y))
+	var head := 0
+	while head < todo.size():
+		var c := todo[head]
+		head += 1
+		var d: int = reach[c]
+		if d >= MOUTH_R:
+			continue
+		for n: Vector2i in [c + Vector2i.LEFT, c + Vector2i.RIGHT, c + Vector2i.UP, c + Vector2i.DOWN]:
+			if n.x < 0 or n.x >= W or n.y < 0 or n.y >= H or reach.has(n) or light[_i(n.x, n.y)] == 1.0:
+				continue
+			reach[n] = d + 1
+			light[_i(n.x, n.y)] = maxf(light[_i(n.x, n.y)], 1.0 - (d + 1) / (MOUTH_R + 1.0))
+			if not solid(n.x, n.y):
+				todo.append(n)
 	for r in rocks:
 		if r.colour == YELLOW:
 			_flood(light, r.rect().get_center(), LIGHT_R)
@@ -1272,9 +1360,14 @@ func _light() -> void:
 		for c in b.cells:
 			if b.paint.get(c, PLAIN) == YELLOW:
 				_flood(light, b.pos + Vector2(c) + Vector2(0.5, 0.5), LIGHT_R)
-	marta_light = light.duplicate()
-	if cloak == YELLOW:
-		_flood(marta_light, marta.centre(), CLOAK_R)
+
+
+func _beside_dark(x: int, y: int) -> bool:
+	for d: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.UP]:
+		var n := Vector2i(x, y) + d
+		if n.x >= 0 and n.x < W and n.y >= 0 and n.y < H and light[_i(n.x, n.y)] < 1.0 and not solid(n.x, n.y):
+			return true
+	return false
 
 
 ## Light from one point, fading over r squares. It spreads only through open squares, lighting the
