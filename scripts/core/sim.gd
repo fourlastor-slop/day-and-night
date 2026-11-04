@@ -6,13 +6,15 @@ extends RefCounted
 
 enum { AIR, EARTH, WATER, BLOCK, ROCK }
 enum { PLAIN, WHITE, BLUE }
-enum { HAMMER, PICK }
+enum { HAMMER, PICK, ROPE }
 enum { PARKED, DRIVING, BACKING }
 
 const W := 60
 const H := 15
 const ROAD := 10
 const TERRAIN := {".": AIR, "#": EARTH, "%": ROCK, "~": WATER, "=": BLOCK}
+## The tools a stop can offer him, by the names stops.gd uses.
+const TOOLS := {"hammer": HAMMER, "pick": PICK, "rope": ROPE}
 
 const DT := 1.0 / 60.0
 const STEP := 1.0 / 16.0
@@ -42,6 +44,10 @@ const WHEELS: Array[float] = [2.2, 6.8]
 const TREAD := 0.6
 const HOUSE_SPEED := 3.0
 const BELL := 1.1
+const HOUSE_LOAD := 4
+const MAX_ROPE := 8.0
+## Once its wheels are above this row, the house has risen out of view and the stop is done.
+const LIFTED := -1.0
 
 
 class Rock:
@@ -58,6 +64,17 @@ class Rock:
 
 	func rect() -> Rect2:
 		return Rect2(pos, size)
+
+
+## A rope tied between two things, or hanging loose from a hook. An end on a block moves with it.
+class Rope:
+	var a := Vector2.ZERO
+	var b := Vector2.ZERO
+	var a_block := false
+	var b_block := false
+	var hook := false
+	var rest := Vector2.ZERO
+	var tied := false
 
 
 class Kid:
@@ -78,6 +95,7 @@ class Kid:
 	var pick_block := Vector2i(-1, -1)
 
 	var tool := HAMMER
+	var rope: Rope = null
 	var aim := Vector2i.ZERO
 	var target := Vector2i(-1, -1)
 
@@ -91,6 +109,23 @@ class Kid:
 		return pos - Vector2(0, height / 2)
 
 
+## A group of blocks that came loose from the grid to rise as one.
+class Body:
+	var cells: Array[Vector2i] = []
+	var paint := {}
+	var pos := Vector2.ZERO
+	var size := Vector2.ZERO
+	var house := false
+	## The ends of ropes tied to its blocks: the rope, which end, and where it is on the body.
+	var ends: Array = []
+
+	func rect(c: Vector2i) -> Rect2:
+		return Rect2(pos + Vector2(c), Vector2.ONE)
+
+	func bounds() -> Rect2:
+		return Rect2(pos, size)
+
+
 var name := ""
 var cells := PackedByteArray()
 var ice := PackedByteArray()
@@ -98,9 +133,17 @@ var span := PackedInt32Array()
 var surface := PackedInt32Array()
 var paint := {}
 var rocks: Array[Rock] = []
+var bodies: Array[Body] = []
+var ropes: Array[Rope] = []
+var tools: Array = [HAMMER, PICK]
+## Pictures that belong to the stop but play no part in it, like the pulley's crane.
+var decor: Array = []
+## How close each block in a white group is to lifting it, from 0 to 1, for groups that can't yet.
+var strain := {}
 var marta: Kid
 var giulio: Kid
 var house_x := 3.0
+var house_y := float(ROAD)
 var house_safe := 3.0
 var house_state := PARKED
 var goal := 46.0
@@ -126,7 +169,10 @@ func _init(stop: Dictionary) -> void:
 		assert(row.length() == W, "%s row %d needs %d squares" % [name, y, W])
 		for x in W:
 			var c := row[x]
-			if TERRAIN.has(c):
+			if c == "|":
+				cells[_i(x, y)] = AIR
+				_hang(x)
+			elif TERRAIN.has(c):
 				cells[_i(x, y)] = TERRAIN[c]
 			else:
 				cells[_i(x, y)] = WATER if _wet(row, x) else AIR
@@ -142,6 +188,10 @@ func _init(stop: Dictionary) -> void:
 			if cells[_i(x, y)] == WATER:
 				surface[x] = y
 				break
+	decor = stop.get("decor", [])
+	tools.clear()
+	for t: String in stop.get("tools", ["hammer", "pick"]):
+		tools.append(TOOLS[t])
 	house_x = stop.house
 	house_safe = house_x
 	goal = stop.goal
@@ -150,6 +200,16 @@ func _init(stop: Dictionary) -> void:
 	giulio.height = 1.6
 	giulio.jump_v = 14.4
 	giulio.wake = 5.0
+
+
+## A rope that hangs from a pulley above the top of the view, its free end loose at the road.
+func _hang(x: int) -> void:
+	var r := Rope.new()
+	r.hook = true
+	r.a = Vector2(x + 0.5, -1.0)
+	r.rest = Vector2(x + 0.5, ROAD - 0.5)
+	r.b = r.rest
+	ropes.append(r)
 
 
 ## A rock's own squares are water if the water carries on beside it, and air otherwise.
@@ -166,6 +226,7 @@ func _wet(row: String, x: int) -> bool:
 func tick() -> void:
 	t += 1
 	_tick_rocks()
+	_tick_bodies()
 	_freeze()
 	_tick_kid(marta)
 	_tick_kid(giulio)
@@ -177,6 +238,7 @@ func tick() -> void:
 	_interact(giulio)
 	_tick_house()
 	if _dirty:
+		_lift()
 		_stress()
 
 
@@ -209,12 +271,22 @@ func _i(x: int, y: int) -> int:
 	return y * W + x
 
 
-func _tiles_hit(r: Rect2) -> bool:
+## Whether a rectangle overlaps anything solid: the grid, or a group of blocks on the move.
+func _tiles_hit(r: Rect2, skip: Body = null) -> bool:
 	for y in range(floori(r.position.y), ceili(r.end.y)):
 		for x in range(floori(r.position.x), ceili(r.end.x)):
 			if solid(x, y):
 				return true
-	return false
+	return _body_hit(r, skip) != null
+
+
+func _body_hit(r: Rect2, skip: Body = null) -> Body:
+	for b in bodies:
+		if b != skip and b.bounds().intersects(r):
+			for c in b.cells:
+				if b.rect(c).intersects(r):
+					return b
+	return null
 
 
 ## The middle of the first solid square in a rectangle that has one.
@@ -473,12 +545,15 @@ func _default_target(k: Kid, here: Vector2i) -> Vector2i:
 func _use_tool() -> void:
 	var k := giulio
 	if k.pad.next_p:
-		k.tool = PICK if k.tool == HAMMER else HAMMER
+		k.rope = null
+		k.tool = tools[(tools.find(k.tool) + 1) % tools.size()]
 	if not k.pad.use_p or not can_use():
 		return
 	var c := k.target
 	var what := cell(c.x, c.y)
-	if what == AIR:
+	if k.tool == ROPE:
+		_rope_at(c)
+	elif what == AIR:
 		cells[_i(c.x, c.y)] = BLOCK
 		_dirty = true
 	elif what == WATER:
@@ -497,6 +572,10 @@ func can_use() -> bool:
 	var what := cell(c.x, c.y)
 	if giulio.tool == PICK:
 		return what == EARTH
+	if giulio.tool == ROPE:
+		if giulio.rope != null:
+			return _ties_to(giulio.rope, c)
+		return _hanging_at(c) != null or _rope_end_at(c) != null or what == BLOCK or ground(c.x, c.y)
 	if what == AIR:
 		return _touches(c) and not _occupied(c)
 	return what == BLOCK or (what == WATER and not frozen(c.x, c.y))
@@ -512,7 +591,8 @@ func _touches(c: Vector2i) -> bool:
 
 func _occupied(c: Vector2i) -> bool:
 	var box := Rect2(c, Vector2.ONE)
-	return marta.rect().intersects(box) or giulio.rect().intersects(box) or _rock_hit(box, Rect2()) != null
+	return marta.rect().intersects(box) or giulio.rect().intersects(box) or _rock_hit(box, Rect2()) != null \
+			or _body_hit(box) != null
 
 
 ## How far each placed block is from what holds it. A block over the ground or over a rock is held,
@@ -548,6 +628,9 @@ func _stress() -> void:
 
 
 func _held(x: int, y: int) -> bool:
+	for r in ropes:
+		if _hangs(r, Vector2i(x, y)):
+			return true
 	var below := y + 1
 	while cell(x, below) == BLOCK:
 		below += 1
@@ -559,6 +642,111 @@ func _held(x: int, y: int) -> bool:
 	return false
 
 
+# ---- rope -----------------------------------------------------------------------------------
+
+
+## The rope tool: picks up a hanging rope or starts a new one, ties the one in hand, or unties one.
+func _rope_at(c: Vector2i) -> void:
+	var k := giulio
+	if k.rope != null:
+		_finish(k.rope, c)
+		k.rope = null
+		return
+	var loose := _hanging_at(c)
+	if loose != null:
+		k.rope = loose
+		return
+	var tied := _rope_end_at(c)
+	if tied != null:
+		untie(tied)
+		return
+	k.rope = Rope.new()
+	k.rope.a = _centre(c)
+	k.rope.a_block = cell(c.x, c.y) == BLOCK
+
+
+## Ties a rope between two squares, each a block or the ground. Returns false if it can't go there.
+func tie(from: Vector2i, to: Vector2i) -> bool:
+	var r := Rope.new()
+	r.a = _centre(from)
+	r.a_block = cell(from.x, from.y) == BLOCK
+	if (not r.a_block and not ground(from.x, from.y)) or not _ties_to(r, to):
+		return false
+	_finish(r, to)
+	return true
+
+
+func untie(r: Rope) -> void:
+	if r.hook:
+		r.tied = false
+		r.b = r.rest
+		r.b_block = false
+	else:
+		ropes.erase(r)
+	_dirty = true
+
+
+## Whether a rope's free end can be tied here: a block or the ground, in reach of the other end, with
+## a block at one end at least.
+func _ties_to(r: Rope, c: Vector2i) -> bool:
+	var block := cell(c.x, c.y) == BLOCK
+	if not block and not ground(c.x, c.y):
+		return false
+	if not (block or r.a_block) or Vector2i(r.a.floor()) == c:
+		return false
+	return r.hook or r.a.distance_to(_centre(c)) <= MAX_ROPE
+
+
+func _finish(r: Rope, c: Vector2i) -> void:
+	r.b = _centre(c)
+	r.b_block = cell(c.x, c.y) == BLOCK
+	r.tied = true
+	if r not in ropes:
+		ropes.append(r)
+	_dirty = true
+
+
+func _hanging_at(c: Vector2i) -> Rope:
+	for r in ropes:
+		if r.hook and not r.tied and Vector2i(r.rest.floor()) == c:
+			return r
+	return null
+
+
+func _rope_end_at(c: Vector2i) -> Rope:
+	for r in ropes:
+		if r.tied and (Vector2i(r.b.floor()) == c or (not r.hook and Vector2i(r.a.floor()) == c)):
+			return r
+	return null
+
+
+## A block hangs from a rope whose other end is fixed above it, so it counts as held up.
+func _hangs(r: Rope, c: Vector2i) -> bool:
+	if not r.tied:
+		return false
+	if r.b_block and Vector2i(r.b.floor()) == c and not r.a_block:
+		return r.a.y < r.b.y - 0.5
+	if r.a_block and Vector2i(r.a.floor()) == c and not r.b_block:
+		return r.b.y < r.a.y - 0.5
+	return false
+
+
+## A group tied to fixed ground that isn't above it can't lift.
+func _tethered(group: Array) -> bool:
+	for r in ropes:
+		if not r.tied or r.a_block == r.b_block:
+			continue
+		var block := r.a if r.a_block else r.b
+		var fixed := r.b if r.a_block else r.a
+		if Vector2i(block.floor()) in group and fixed.y >= block.y - 0.5:
+			return true
+	return false
+
+
+func _centre(c: Vector2i) -> Vector2:
+	return Vector2(c) + Vector2(0.5, 0.5)
+
+
 # ---- the house ------------------------------------------------------------------------------
 
 
@@ -567,7 +755,7 @@ func _interact(k: Kid) -> void:
 		return
 	if near_bell(k):
 		_ring()
-	elif near_house(k) and house_state == PARKED:
+	elif near_house(k) and house_state == PARKED and not riding():
 		house_state = DRIVING
 
 
@@ -582,13 +770,37 @@ func near_bell(k: Kid) -> bool:
 ## What the wheels rest on, here and where the house would roll back to. It stays put, because a house
 ## with nothing under it has no way back up.
 func bearing(c: Vector2i) -> bool:
-	if c.y != ROAD:
-		return false
-	for at: float in [house_x, house_safe]:
+	for spot: Vector2 in [Vector2(house_x, house_y), Vector2(house_safe, ROAD)]:
+		if c.y != roundi(spot.y):
+			continue
 		for w in WHEELS:
-			if c.x < at + w + TREAD and c.x + 1 > at + w - TREAD:
+			if c.x < spot.x + w + TREAD and c.x + 1 > spot.x + w - TREAD:
 				return true
 	return false
+
+
+## Whether the house has something under both wheels: the ground, blocks, or a lift it's riding.
+func house_stands() -> bool:
+	if riding():
+		return true
+	var row := roundi(house_y)
+	for w in WHEELS:
+		var x := floori(house_x + w)
+		if cell(x, row) != BLOCK and not ground(x, row):
+			return false
+	return true
+
+
+## Whether the house is riding a group of blocks that's on the move.
+func riding() -> bool:
+	for b in bodies:
+		if b.house:
+			return true
+	return false
+
+
+func _house_body(x: float) -> Rect2:
+	return Rect2(x + 0.1, house_y - HOUSE_H, HOUSE_W - 0.2, HOUSE_H - 0.1)
 
 
 ## The bell puts loose rocks back, so nothing can be lost for good. One holding up a plank is doing
@@ -621,7 +833,8 @@ func _tick_house() -> void:
 			house_state = PARKED
 	elif house_state == DRIVING:
 		var next := house_x + HOUSE_SPEED * DT
-		var body := Rect2(next + 0.1, ROAD - HOUSE_H, HOUSE_W - 0.2, HOUSE_H - 0.1)
+		var row := roundi(house_y)
+		var body := _house_body(next)
 		var rock := _rock_hit(body, Rect2())
 		if rock != null:
 			_refuse(rock.rect().get_center())
@@ -632,13 +845,13 @@ func _tick_house() -> void:
 		var on_ground := true
 		for w in WHEELS:
 			var x := floori(next + w + TREAD)
-			var c := cell(x, ROAD)
-			if c == BLOCK and span_at(x, ROAD) >= MAX_SPAN:
-				_collapse(Vector2i(x, ROAD))
+			var c := cell(x, row)
+			if c == BLOCK and span_at(x, row) >= MAX_SPAN:
+				_collapse(Vector2i(x, row))
 				house_state = BACKING
 				return
-			if c != BLOCK and not ground(x, ROAD):
-				_refuse(Vector2(x + 0.5, ROAD + 0.5))
+			if c != BLOCK and not ground(x, row):
+				_refuse(Vector2(x + 0.5, row + 0.5))
 				return
 			on_ground = on_ground and c != BLOCK
 		house_x = next
@@ -652,6 +865,8 @@ func _tick_house() -> void:
 func _refuse(at: Vector2) -> void:
 	house_state = PARKED
 	events.append({"kind": "refuse", "at": at})
+	# Where it waits now, its weight may be on a white group.
+	_dirty = true
 
 
 ## Too much load: every overstretched block joined to this one goes at once.
@@ -667,3 +882,189 @@ func _collapse(start: Vector2i) -> void:
 		for d: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
 			todo.append(c + d)
 	_dirty = true
+
+
+# ---- lifts ----------------------------------------------------------------------------------
+
+
+## A group of blocks comes loose and rises once at least half of it is white, counting the house as
+## extra weight when it stands on the group. Too little white only makes the group strain.
+func _lift() -> void:
+	strain.clear()
+	for group in _groups():
+		var white := 0
+		for c: Vector2i in group:
+			if paint.get(_i(c.x, c.y), PLAIN) == WHITE:
+				white += 1
+		if white == 0:
+			continue
+		var wheels := _wheels_on(group)
+		var heavy := group.size() - white + (HOUSE_LOAD if wheels > 0 else 0)
+		if white < heavy:
+			for c: Vector2i in group:
+				strain[_i(c.x, c.y)] = float(white) / heavy
+		# With only one wheel on the group, the house's other wheel on the ground holds it down.
+		elif wheels != 1 and not _tethered(group):
+			_loosen(group, wheels == 2)
+
+
+## Blocks joined side to side, or tied together with rope, make one group.
+func _groups() -> Array[Array]:
+	var links := {}
+	for r in ropes:
+		if r.tied and r.a_block and r.b_block:
+			var a := Vector2i(r.a.floor())
+			var b := Vector2i(r.b.floor())
+			links[a] = links.get(a, []) + [b]
+			links[b] = links.get(b, []) + [a]
+	var seen := {}
+	var groups: Array[Array] = []
+	for y in H:
+		for x in W:
+			if cells[_i(x, y)] != BLOCK or seen.has(_i(x, y)):
+				continue
+			var group: Array[Vector2i] = []
+			var todo: Array[Vector2i] = [Vector2i(x, y)]
+			seen[_i(x, y)] = true
+			while not todo.is_empty():
+				var c: Vector2i = todo.pop_back()
+				group.append(c)
+				var next: Array = links.get(c, [])
+				for d: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+					next.append(c + d)
+				for n: Vector2i in next:
+					if n.x >= 0 and n.x < W and n.y >= 0 and n.y < H and cells[_i(n.x, n.y)] == BLOCK \
+							and not seen.has(_i(n.x, n.y)):
+						seen[_i(n.x, n.y)] = true
+						todo.append(n)
+			groups.append(group)
+	return groups
+
+
+func _wheels_on(group: Array) -> int:
+	var n := 0
+	for w in WHEELS:
+		if Vector2i(floori(house_x + w), roundi(house_y)) in group:
+			n += 1
+	return n
+
+
+## Takes a group out of the grid to rise as one body, unless something stops it straight away.
+func _loosen(group: Array, rides: bool) -> void:
+	var b := Body.new()
+	var low := Vector2i(W, H)
+	var high := Vector2i(-1, -1)
+	for c: Vector2i in group:
+		low = low.min(c)
+		high = high.max(c)
+	b.pos = Vector2(low)
+	b.size = Vector2(high - low + Vector2i.ONE)
+	b.house = rides
+	for c: Vector2i in group:
+		b.cells.append(c - low)
+		cells[_i(c.x, c.y)] = AIR
+	if not _can_move(b, Vector2(0, -RISE * DT), _riders(b)):
+		for c: Vector2i in group:
+			cells[_i(c.x, c.y)] = BLOCK
+		return
+	for c: Vector2i in group:
+		if paint.has(_i(c.x, c.y)):
+			b.paint[c - low] = paint[_i(c.x, c.y)]
+			paint.erase(_i(c.x, c.y))
+	for r in ropes:
+		for end in ["a", "b"]:
+			if r.get(end + "_block") and r.tied and Vector2i(r.get(end).floor()) in group:
+				b.ends.append([r, end, r.get(end) - b.pos])
+	bodies.append(b)
+	_dirty = true
+
+
+func _tick_bodies() -> void:
+	for b: Body in bodies.duplicate():
+		# Once the house is up out of view, its lift has done its job and waits there.
+		if b.house and done:
+			continue
+		var riders := _riders(b)
+		var d := Vector2(0, -RISE * DT)
+		if not _can_move(b, d, riders):
+			_settle(b)
+			continue
+		b.pos += d
+		_move_ends(b)
+		for o in riders:
+			o.pos += d
+		if b.house:
+			house_y += d.y
+			if house_y <= LIFTED:
+				done = true
+		if b.pos.y + b.size.y < SKY:
+			for e in b.ends:
+				untie(e[0])
+			bodies.erase(b)
+			_dirty = true
+
+
+## Kids and rocks standing on top of the body, who go up with it.
+func _riders(b: Body) -> Array:
+	var on := []
+	for k: Kid in [marta, giulio]:
+		if _on_top(k.rect(), b):
+			on.append(k)
+	for r in rocks:
+		if _on_top(r.rect(), b):
+			on.append(r)
+	return on
+
+
+func _on_top(box: Rect2, b: Body) -> bool:
+	for c in b.cells:
+		var top := b.rect(c)
+		if absf(box.end.y - top.position.y) < 0.08 and box.end.x > top.position.x and box.position.x < top.end.x:
+			return true
+	return false
+
+
+## Whether the body, everyone riding it and the house if it's aboard all have room to move.
+func _can_move(b: Body, d: Vector2, riders: Array) -> bool:
+	var boxes: Array[Rect2] = []
+	for c in b.cells:
+		boxes.append(b.rect(c))
+	if not b.house:
+		var house := _house_body(house_x)
+		for box in boxes:
+			if box.intersects(house.grow(-0.01)):
+				return false
+	for o in riders:
+		boxes.append(o.rect())
+	if b.house:
+		boxes.append(_house_body(house_x))
+	for box in boxes:
+		box.position += d
+		if _tiles_hit(box, b):
+			return false
+		for r in rocks:
+			if r not in riders and r.rect().intersects(box):
+				return false
+	return true
+
+
+## Something stopped the body, so it drops back into the grid on the nearest row it fits.
+func _settle(b: Body) -> void:
+	var drop := ceilf(b.pos.y - 0.01) - b.pos.y
+	b.pos.y += drop
+	for c in b.cells:
+		var at := Vector2i(b.pos.round()) + c
+		if at.x >= 0 and at.x < W and at.y >= 0 and at.y < H and cells[_i(at.x, at.y)] == AIR:
+			cells[_i(at.x, at.y)] = BLOCK
+			if b.paint.has(c):
+				paint[_i(at.x, at.y)] = b.paint[c]
+	if b.house:
+		house_y += drop
+	_move_ends(b)
+	bodies.erase(b)
+	_dirty = true
+
+
+func _move_ends(b: Body) -> void:
+	for e in b.ends:
+		e[0].set(e[1], b.pos + e[2])

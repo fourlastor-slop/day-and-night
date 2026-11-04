@@ -3,6 +3,7 @@ extends RefCounted
 ## Every stop on the road, as maps the Sim builds itself from. One character per square, 60 across and
 ## 15 down, with the road along row 10:
 ##   .  air      #  earth      %  rock, which the pick can't dig      ~  water      =  a plank
+##   |  a rope hanging from a pulley above the top of the view, with its free end at the road
 ##   A  a loose rock's top-left square, with a for the rest of it. B and b are the next rock, and so on.
 
 ## How many stops the whole road will have, so the sun and moon can close in as it goes.
@@ -89,5 +90,35 @@ const RIVER := {
 	],
 }
 
+## The Meadow's end. The road stops at a cliff over an old lift shaft. Tied to the pulley's two ropes
+## (each | is where one hangs), his platform holds the house, and once she has painted enough of it
+## white it lifts the house up the cliff.
+const CLIFF := {
+	"name": "The Cliff Lift",
+	"house": 3.0,
+	"goal": 46.0,
+	"marta": 14.0,
+	"giulio": 16.0,
+	"tools": ["hammer", "pick", "rope"],
+	"decor": [{"sprite": "crane", "at": Vector2(36.6, -0.6)}],
+	"map": [
+		"......................................|....|................",
+		"............................................................",
+		"............................................................",
+		"..............................................%%%%%%%%%%%%%%",
+		"..............................................%%%%%%%%%%%%%%",
+		"..............................................%%%%%%%%%%%%%%",
+		"..............................................%%%%%%%%%%%%%%",
+		"..............................................%%%%%%%%%%%%%%",
+		"..............................................%%%%%%%%%%%%%%",
+		"..............................................%%%%%%%%%%%%%%",
+		"###################################...........%%%%%%%%%%%%%%",
+		"###################################...........%%%%%%%%%%%%%%",
+		"###################################...........%%%%%%%%%%%%%%",
+		"##############################################%%%%%%%%%%%%%%",
+		"##############################################%%%%%%%%%%%%%%",
+	],
+}
+
 ## The stops built so far, in the order the road meets them.
-const ROAD := [BROOK, GULLY, RIVER]
+const ROAD := [BROOK, GULLY, RIVER, CLIFF]

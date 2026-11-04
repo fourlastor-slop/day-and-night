@@ -52,11 +52,7 @@ func refused_at() -> Vector2:
 
 
 func wheels_stand() -> bool:
-	for w in Sim.WHEELS:
-		var x := floori(sim.house_x + w)
-		if not sim.ground(x, Sim.ROAD) and sim.cell(x, Sim.ROAD) != Sim.BLOCK:
-			return false
-	return true
+	return sim.house_stands()
 
 
 func plank(x: int, y: int) -> void:

@@ -6,7 +6,7 @@ A side-view co-op adventure for two players at one computer: Marta, who loves dr
 building. They're kids of different ages and both are smart, so challenges must be real challenges: hard, but
 never impossible.
 
-Working title. This is a draft. The Meadow's first three stops exist as a prototype, and the rest is untested.
+Working title. This is a draft. The Meadow exists as a prototype, and the rest is untested.
 
 ## The hook
 

@@ -276,6 +276,7 @@ PINK = '#ff6fb0'
 PURPLE = '#7a3fd1'
 ORANGE = '#f08a24'
 COAT = '#e0982c'
+ROPE = '#b48a52'
 
 
 def ridge(W, base, amps, seed, H):
@@ -460,7 +461,7 @@ def giulio(p, x, gy, f=1, coat=COAT, tool='hammer', scale=1.0):
         p.shape(rbox(X + dx * u - .03 * u, Y - .2 * u, X + dx * u + .2 * u, Y + 1, 4), BOOT, line=.6, shadow=.12, **S)
     # the tool behind the raised arm
     hx, hy = X + .66 * f * u, Y - 1.72 * u
-    if tool:
+    if tool in ('hammer', 'pick'):
         p.line([[X + .22 * f * u, Y - .86 * u], [hx, hy]], WOOD_L, w=.1 * u, a=1, amp=.3, grain=False, painted=True)
     if tool == 'hammer':
         p.shape(rbox(hx - .3 * u, hy - .17 * u, hx + .3 * u, hy + .17 * u, 3), '#9aa3ad', line=.75, lw=1.8, shadow=.14, rim=.2,
@@ -468,6 +469,8 @@ def giulio(p, x, gy, f=1, coat=COAT, tool='hammer', scale=1.0):
     elif tool == 'pick':
         arc = [(hx + .62 * u * math.cos(a), hy + .5 * u + .54 * u * math.sin(a)) for a in np.linspace(-2.45, -.69, 12)]
         p.line(arc, '#9aa3ad', w=.13 * u, a=1, amp=.3, grain=False, painted=True)
+    elif tool == 'rope':
+        rope_coil(p, X + .5 * f * u, Y - 1.02 * u, .3 * u)
     pts = rbox(X - .4 * u, Y - 1.12 * u, X + .4 * u, Y - .16 * u, .2 * u)
     p.shape(pts, '#efe6d4', line=0, shadow=.22, rim=0, painted=True)
     p.shape(pts, coat, kind='crayon', line=.8, lw=2.1, shadow=0, rim=.08)
@@ -484,6 +487,13 @@ def giulio(p, x, gy, f=1, coat=COAT, tool='hammer', scale=1.0):
             painted=True)
     p.dot(fx, fy - r * 1.22, .1 * u, '#e7dfcb')
     p.shape(ell(X + .3 * f * u, Y - .86 * u, .12 * u, .12 * u, 12), SKIN, line=.55, lw=1.4, shadow=.1, rim=0, painted=True)
+
+
+def rope_coil(p, cx, cy, r):
+    for k in range(3):
+        p.line(ell(cx + (k - 1) * r * .18, cy, r * .62, r, 18), ROPE, w=r * .2, a=1, closed=True, amp=.3, grain=False,
+               painted=True)
+    p.line([(cx + r * .4, cy + r * .8), (cx + r * .55, cy + r * 1.5)], ROPE, w=r * .2, a=1, amp=.3, grain=False, painted=True)
 
 
 def sparkle(p, x, y, r, col=WHITE):

@@ -17,6 +17,7 @@ func _ready() -> void:
 	await brook()
 	await gully()
 	await river()
+	await cliff()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(game.save_path))
 	get_tree().quit()
 
@@ -128,6 +129,54 @@ func river() -> void:
 		sim.tick()
 		limit -= 1
 	await shot("river-12-done")
+
+
+func cliff() -> void:
+	var sim := begin(Stops.CLIFF)
+	await shot("cliff-1-start")
+	bot.build_deck(35, 45)
+	await shot("cliff-2-red")
+	var k := sim.giulio
+	while k.tool != Sim.ROPE:
+		bot.press(k, "next_p")
+	bot.walk(k, 37.5)
+	k.facing = 1
+	bot.use_at(Vector2i(38, 9))
+	await shot("cliff-3-rope-in-hand")
+	bot.use_at(Vector2i(38, 10))
+	bot.walk(k, 42.5)
+	k.facing = 1
+	bot.use_at(Vector2i(43, 9))
+	bot.use_at(Vector2i(43, 10))
+	await shot("cliff-4-tied")
+	bot.drive()
+	await shot("cliff-5-on-the-platform", 20)
+	whiten(sim, 7)
+	await shot("cliff-6-straining", 7)
+	whiten(sim, 8)
+	bot.run(90)
+	await shot("cliff-7-lifting", 2)
+	bot.run(400)
+	await shot("cliff-8-done")
+
+
+## Marta walks along the platform painting its blocks white until that many are.
+func whiten(sim: Sim, count: int) -> void:
+	var m := sim.marta
+	if m.colour != Sim.WHITE:
+		bot.press(m, "next_p")
+	for x in range(35, 46):
+		var n := 0
+		for i in range(35, 46):
+			n += 1 if sim.paint.get(Sim.ROAD * Sim.W + i, Sim.PLAIN) == Sim.WHITE else 0
+		if n >= count:
+			return
+		if sim.paint.get(Sim.ROAD * Sim.W + x, Sim.PLAIN) == Sim.WHITE:
+			continue
+		bot.walk(m, x + 0.5)
+		bot.run(2)
+		if m.pick_block == Vector2i(x, Sim.ROAD):
+			bot.press(m, "use_p")
 
 
 ## Goes to a stop in the real game and gives the bots its sim.

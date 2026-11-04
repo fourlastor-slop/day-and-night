@@ -10,7 +10,7 @@ import numpy as np
 from PIL import Image
 
 from paint import (BLUE, GREEN, GRASS, ORANGE, P, RED, STONE, U, WHITE, WOOD, WOOD_D, YELLOW, Multi, cloud, ell, giulio, grass_strip,
-                   house, marta, painted_rock, plain_rock, rbox, rgb, ridge, rock, sparkle, tree, wheel)
+                   house, marta, painted_rock, plain_rock, rbox, rgb, ridge, rock, rope_coil, sparkle, tree, wheel)
 
 OUT = os.path.join(os.path.dirname(__file__), '..', 'assets', 'gfx')
 EARTH = ('#b39877', '#a98f70', '#9e866a', '#937c63', '#88725b')
@@ -174,15 +174,29 @@ def colours_strip(p):
         p.shape(q, col, kind='crayon', line=.7, lw=1.8, shadow=0, rim=.08, amp=1, step=7, hatch=k)
 
 
-def tools_strip(p):
-    p.shape(rbox(10, 8, 186, 92, 12), '#e5e0d4', line=.5, shadow=.3, rim=.2, painted=True, hatch=2)
-    cx, cy = 58, 50
-    p.line([(cx - 14, cy + 20), (cx + 8, cy - 8)], WOOD_D, w=6, a=1, amp=.3, grain=False, painted=True)
-    p.shape(rbox(cx - 8, cy - 22, cx + 24, cy - 4, 3), '#7f8892', line=.7, lw=1.6, shadow=.1, rim=.2, painted=True, step=6)
-    cx += 80
-    p.line([(cx - 14, cy + 20), (cx + 8, cy - 10)], WOOD_D, w=6, a=1, amp=.3, grain=False, painted=True)
-    arc = [(cx + 4 + 26 * math.cos(a), cy + 2 + 22 * math.sin(a)) for a in np.linspace(-2.7, -.3, 10)]
-    p.line(arc, '#7f8892', w=7, a=1, amp=.3, grain=False, painted=True)
+def tools_strip(p, tools):
+    p.shape(rbox(10, 8, 26 + 80 * len(tools), 92, 12), '#e5e0d4', line=.5, shadow=.3, rim=.2, painted=True, hatch=2)
+    for k, tool in enumerate(tools):
+        cx, cy = 58 + 80 * k, 50
+        if tool == 'hammer':
+            p.line([(cx - 14, cy + 20), (cx + 8, cy - 8)], WOOD_D, w=6, a=1, amp=.3, grain=False, painted=True)
+            p.shape(rbox(cx - 8, cy - 22, cx + 24, cy - 4, 3), '#7f8892', line=.7, lw=1.6, shadow=.1, rim=.2, painted=True, step=6)
+        elif tool == 'pick':
+            p.line([(cx - 14, cy + 20), (cx + 8, cy - 10)], WOOD_D, w=6, a=1, amp=.3, grain=False, painted=True)
+            arc = [(cx + 4 + 26 * math.cos(a), cy + 2 + 22 * math.sin(a)) for a in np.linspace(-2.7, -.3, 10)]
+            p.line(arc, '#7f8892', w=7, a=1, amp=.3, grain=False, painted=True)
+        elif tool == 'rope':
+            rope_coil(p, cx, cy - 2, 20)
+
+
+def crane(p):
+    """The old pulley's crane: a post on the cliff top and an arm across the top of the view, with two wheels."""
+    post = 10.4 * U
+    p.shape(rbox(post, .3 * U, post + .6 * U, 3.7 * U, 4), WOOD_D, line=.6, lw=1.6, shadow=.2, rim=.1, amp=.6, hatch=1)
+    p.shape(rbox(.3 * U, .4 * U, 11.3 * U, .8 * U, 4), WOOD, line=.6, lw=1.6, shadow=.2, rim=.12, amp=.6, hatch=2)
+    p.line([(post + .1 * U, 2.2 * U), (8.6 * U, .8 * U)], WOOD_D, w=8, a=1, amp=.4, grain=False, painted=True)
+    for x in (1.9, 6.9):
+        wheel(p, x * U, .9 * U, .3 * U)
 
 
 def selected(p):
@@ -306,6 +320,7 @@ def main():
     write('marta_blue', cutout(150, 124, lambda p: marta(p, 60 / U, 116 / U, 1, tip=BLUE)))
     write('giulio_hammer', cutout(140, 112, lambda p: giulio(p, 56 / U, 104 / U, 1, tool='hammer')))
     write('giulio_pick', cutout(140, 112, lambda p: giulio(p, 56 / U, 104 / U, 1, tool='pick')))
+    write('giulio_rope', cutout(140, 112, lambda p: giulio(p, 56 / U, 104 / U, 1, tool='rope')))
     write('house', cutout(540, 540, lambda p: house(p, 60 / U, 520 / U, wheels=False)))
     write('wheel', cutout(120, 120, lambda p: wheel(p, 60, 60, 49)))
     write('window', cutout(120, 120, window))
@@ -313,7 +328,8 @@ def main():
     write('ring', cutout(200, 200, ring))
     write('target', cutout(80, 80, target))
     write('strip_colours', cutout(196, 100, colours_strip))
-    write('strip_tools', cutout(196, 100, tools_strip))
+    write('strip_tools', cutout(196, 100, lambda p: tools_strip(p, ('hammer', 'pick'))))
+    write('strip_tools_3', cutout(276, 100, lambda p: tools_strip(p, ('hammer', 'pick', 'rope'))))
     write('selected', cutout(84, 84, selected))
     write('join', cutout(1920, 44, join))
     write('sun', cutout(120, 120, lambda p: disc(p, '#f3c95a')))
@@ -324,6 +340,7 @@ def main():
     write('keys', cutout(64 * len(CAPS), 64, keys_sheet))
     write('strip_aim', cutout(104, 100, strip_aim))
     write('aim_arrows', cutout(140, 140, aim_arrows))
+    write('crane', cutout(int(11.8 * U), int(3.9 * U), crane))
     write('banner', cutout(420, 280, banner))
 
 

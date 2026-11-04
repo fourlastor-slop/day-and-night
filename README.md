@@ -6,7 +6,7 @@ A side-view co-op game for two kids at one computer, made in Godot 4.7 (GDScript
 top, Giulio's night below, both showing the same world at the same time. Whatever one does appears in the other's half
 straight away. [DESIGN.md](DESIGN.md) has the whole idea.
 
-This is a prototype of the Meadow's first three stops: the Brook, the Gully and the River.
+This is a prototype of the Meadow, the first land: the Brook, the Gully, the River and the Cliff Lift.
 
 ## Play it
 
@@ -36,20 +36,25 @@ button, the direction keys move his target up to 3 blocks away. The drive button
 at the bell on its back end, where it rings. If the house can't go, it shudders and a crossed wheel appears on whatever
 stopped it.
 
+At the Cliff Lift Giulio's tools include a rope. Aim at one end and press his use key, then aim at the other end and press
+it again. Pressing it on a rope's end unties it.
+
 ## What's in the prototype
 
 - **The two views:** one world and two cameras, with the night tone added by a shader.
-- **Marta:** white and blue paint on rocks and blocks, a short reach, and washing paint off.
-- **Giulio:** hammer and pick, wood planks that never run out, and stress colours.
+- **Marta:** white and blue paint on rocks and blocks, a short reach, and washing paint off. A group of his blocks
+  rises once at least half of it is white, and strains a little before that.
+- **Giulio:** hammer and pick, wood planks that never run out, and stress colours. At the Cliff Lift he gets rope: a
+  block tied to something solid above it counts as held up, and things tied together move as one.
 - **The house:** it refuses a gap, breaks a bridge that can't hold it, and rolls back to safety. What its wheels rest on
-  can't be dug out.
+  can't be dug out. It weighs as much as 4 plain blocks, so a lift needs that much more white to carry it.
 - **The bell:** it brings back lost rocks, and leaves any that are holding up a plank or that the house has reached.
-- **The road:** three stops, each a text map in `scripts/core/stops.gd`, played in order. Progress is saved in
+- **The road:** four stops, each a text map in `scripts/core/stops.gd`, played in order. Progress is saved in
   `user://progress.cfg`.
 - **Rock:** ground the pick can't dig, which holds up planks the way earth does. It makes the Gully's shelf and cliff.
 
-Not in yet: the Cliff Lift and the Old Mines, playing alone, her cloak, mixing, the easel, more tools and block kinds,
-caves, creatures, sound, and white paint on blocks, which looks right but doesn't hold anything up yet.
+Not in yet: the Old Mines, playing alone, her cloak, mixing, the easel, more tools and block kinds, caves, creatures and
+sound.
 
 ## What's in the box
 

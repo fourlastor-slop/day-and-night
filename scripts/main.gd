@@ -12,7 +12,7 @@ const STRIP_AT := Vector2(14, 12)
 const STRIP_KEY := Vector2(180, 18)
 const AIM_AT := Vector2(252, 0)
 const AIM_KEY := Vector2(84, 18)
-const SWATCH_X: Array[float] = [16.0, 96.0]
+const SWATCH_X: Array[float] = [16.0, 96.0, 176.0, 256.0, 336.0]
 const FAR := 62.0
 const NEAR := 10.0
 
@@ -41,6 +41,8 @@ var night_sky: TextureRect
 var world_view: SubViewport
 var colour_ring: TextureRect
 var tool_ring: TextureRect
+var tool_strip: TextureRect
+var aim_strip: TextureRect
 var colour_key: TextureRect
 var tool_key: TextureRect
 var aim_key: TextureRect
@@ -72,8 +74,20 @@ func _start() -> void:
 	sim = Sim.new(Stops.ROAD[stop])
 	stage = Stage.new(sim)
 	world_view.add_child(stage)
+	_lay_out_tools()
 	banner.visible = false
 	refresh()
+
+
+## His strip grows with the tools a stop offers, and the keys beside it move along with its end.
+func _lay_out_tools() -> void:
+	var count := sim.tools.size()
+	tool_strip.texture = load("res://assets/gfx/strip_tools%s.png" % ("" if count == 2 else "_%d" % count))
+	var tools_at := STRIP_AT + Vector2(0, HALF.y + 18)
+	var end := tool_strip.texture.get_width() - 196.0
+	tool_key.position = tools_at + STRIP_KEY + Vector2(end, 0)
+	aim_strip.position = tools_at + AIM_AT + Vector2(end, 0)
+	aim_key.position = aim_strip.position + AIM_KEY
 
 
 func _view(y: int, mask: int, shader: Shader) -> SubViewport:
@@ -121,7 +135,10 @@ func _key(at: Vector2) -> TextureRect:
 	var r := _image("res://assets/gfx/keys.png", self, at)
 	var key := AtlasTexture.new()
 	key.atlas = r.texture
+	key.region = Stage.cap_rect("E")
 	r.texture = key
+	# Sized to one key, or it keeps the whole sheet's width and stretches the key across it.
+	r.size = Vector2(Stage.CAP_CELL, Stage.CAP_CELL)
 	return r
 
 
@@ -130,10 +147,10 @@ func _hud() -> void:
 	_image("res://assets/gfx/strip_colours.png", self, STRIP_AT)
 	colour_ring = _image("res://assets/gfx/selected.png", self, Vector2.ZERO)
 	colour_key = _key(STRIP_AT + STRIP_KEY)
-	_image("res://assets/gfx/strip_tools.png", self, tools_at)
+	tool_strip = _image("res://assets/gfx/strip_tools.png", self, tools_at)
 	tool_ring = _image("res://assets/gfx/selected.png", self, Vector2.ZERO)
 	tool_key = _key(tools_at + STRIP_KEY)
-	_image("res://assets/gfx/strip_aim.png", self, tools_at + AIM_AT)
+	aim_strip = _image("res://assets/gfx/strip_aim.png", self, tools_at + AIM_AT)
 	aim_key = _key(tools_at + AIM_AT + AIM_KEY)
 	_image("res://assets/gfx/join.png", self, Vector2(0, JOIN_Y))
 	sun = _image("res://assets/gfx/sun.png", self, Vector2.ZERO)
@@ -219,7 +236,7 @@ func refresh() -> void:
 	day_sky.position.x = -(day_cam.position.x - lo) * ZOOM * PARALLAX
 	night_sky.position.x = -(night_cam.position.x - lo) * ZOOM * PARALLAX
 	colour_ring.position = STRIP_AT + Vector2(SWATCH_X[sim.marta.colour - Sim.WHITE], 8)
-	tool_ring.position = STRIP_AT + Vector2(SWATCH_X[sim.giulio.tool], HALF.y + 18 + 8)
+	tool_ring.position = STRIP_AT + Vector2(SWATCH_X[sim.tools.find(sim.giulio.tool)], HALF.y + 18 + 8)
 	# The sun and moon close in across the whole road, so each stop moves them a little.
 	var start: float = Stops.ROAD[stop].house
 	var here := clampf((sim.house_x - start) / (sim.goal - start), 0.0, 1.0)

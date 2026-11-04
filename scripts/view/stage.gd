@@ -22,6 +22,8 @@ const BLOCK_CELL := 64.0
 const EARTH_ROWS := 5
 const EARTH_BASE := Color("937c63")
 const ROCK_BASE := Color("8f8d86")
+const ROPE_DARK := Color("6d5233")
+const ROPE_LIGHT := Color("c9a066")
 ## Ground above the top of the house's body draws in front of it, so its flag goes behind a shelf.
 const ROOF := Sim.ROAD - int(Sim.HOUSE_H)
 
@@ -60,7 +62,9 @@ class Ground extends Node2D:
 
 	func _block(x: int, y: int) -> void:
 		var colour: int = sim.paint.get(y * Sim.W + x, Sim.PLAIN)
-		_cell(block, x, y, Rect2(colour * BLOCK_CELL, 0, BLOCK_CELL, BLOCK_CELL))
+		# A straining block is drawn by Lifts, bobbing.
+		if not sim.strain.has(y * Sim.W + x):
+			_cell(block, x, y, Rect2(colour * BLOCK_CELL, 0, BLOCK_CELL, BLOCK_CELL))
 		var n := sim.span_at(x, y)
 		var level := 0 if n <= 1 else n - 1 if n < Sim.MAX_SPAN else 2 if n == Sim.MAX_SPAN else 3
 		var from := Rect2(level * STRESS_CELL.x, 0, STRESS_CELL.x, STRESS_CELL.y)
@@ -106,6 +110,46 @@ class Water extends Node2D:
 			at += w
 
 
+## Groups of blocks on the move, and white groups bobbing as they strain to lift.
+class Lifts extends Node2D:
+	var sim: Sim
+	var block: Texture2D = load("res://assets/gfx/block.png")
+
+	func _draw() -> void:
+		for b in sim.bodies:
+			for c in b.cells:
+				_block(b.pos + Vector2(c), b.paint.get(c, Sim.PLAIN), 0.0)
+		var bob := absf(sin(sim.t * 0.21)) * 3.0
+		for key: int in sim.strain:
+			var at := Vector2(key % Sim.W, floori(float(key) / Sim.W))
+			_block(at, sim.paint.get(key, Sim.PLAIN), bob * sim.strain[key])
+
+	func _block(at: Vector2, colour: int, up: float) -> void:
+		var to := Rect2(at * B - Vector2(8, 8 + up), Vector2(BLOCK_CELL, BLOCK_CELL))
+		draw_texture_rect_region(block, to, Rect2(colour * BLOCK_CELL, 0, BLOCK_CELL, BLOCK_CELL))
+
+
+## Ropes, sagging a little unless something hangs from them, and the one Giulio is carrying.
+class Ropes extends Node2D:
+	var sim: Sim
+
+	func _draw() -> void:
+		var held := sim.giulio.rope
+		for r in sim.ropes:
+			if r != held:
+				_rope(r.a, r.b, 0.0 if r.hook else 0.12)
+		if held != null:
+			_rope(held.a, sim.giulio.pos + Vector2(0.35 * sim.giulio.facing, -0.95), 0.12)
+
+	func _rope(a: Vector2, b: Vector2, sag: float) -> void:
+		var points := PackedVector2Array()
+		for i in 9:
+			var t := i / 8.0
+			points.append((a.lerp(b, t) + Vector2(0, sag * a.distance_to(b) * 4.0 * t * (1.0 - t))) * B)
+		draw_polyline(points, ROPE_DARK, 6.0, true)
+		draw_polyline(points, ROPE_LIGHT, 3.0, true)
+
+
 ## One kid's cues, on that kid's half of the screen only, because their keys are different.
 class Cues:
 	var drive: Sprite2D
@@ -134,6 +178,8 @@ var aim: Sprite2D
 var stop: Sprite2D
 var stop_left := 0
 var use_hold := 0
+var lifts: Lifts
+var ropes: Ropes
 var marta_cues: Cues
 var giulio_cues: Cues
 var marta_keys := {}
@@ -143,7 +189,8 @@ var seen := -1
 
 var rock_tex: Array[Texture2D] = [load("res://assets/gfx/rock_plain.png"), load("res://assets/gfx/rock_white.png"), load("res://assets/gfx/rock_blue.png")]
 var brush_tex: Dictionary = {Sim.WHITE: load("res://assets/gfx/marta_white.png"), Sim.BLUE: load("res://assets/gfx/marta_blue.png")}
-var tool_tex: Dictionary = {Sim.HAMMER: load("res://assets/gfx/giulio_hammer.png"), Sim.PICK: load("res://assets/gfx/giulio_pick.png")}
+var tool_tex: Dictionary = {Sim.HAMMER: load("res://assets/gfx/giulio_hammer.png"), Sim.PICK: load("res://assets/gfx/giulio_pick.png"),
+		Sim.ROPE: load("res://assets/gfx/giulio_rope.png")}
 
 
 func _init(world: Sim) -> void:
@@ -170,6 +217,17 @@ func _init(world: Sim) -> void:
 	frost.sim = sim
 	frost.z_index = 3
 	add_child(frost)
+	lifts = Lifts.new()
+	lifts.sim = sim
+	add_child(lifts)
+	ropes = Ropes.new()
+	ropes.sim = sim
+	ropes.z_index = 6
+	add_child(ropes)
+	for d: Dictionary in sim.decor:
+		var s := _sprite("res://assets/gfx/%s.png" % d.sprite, 1)
+		s.centered = false
+		s.position = d.at * B
 	for w in Sim.WHEELS:
 		wheels.append(_sprite("res://assets/gfx/wheel.png", 4))
 	house = _sprite("res://assets/gfx/house.png", 4)
@@ -235,6 +293,8 @@ func sync() -> void:
 		ground.queue_redraw()
 		overhead.queue_redraw()
 		frost.queue_redraw()
+	lifts.queue_redraw()
+	ropes.queue_redraw()
 	for i in rocks.size():
 		var r: Sim.Rock = sim.rocks[i]
 		rocks[i].texture = rock_tex[r.colour]
@@ -263,10 +323,10 @@ func _sync_house() -> void:
 	var at := sim.house_x * B
 	var bump := sin(sim.t * 0.5) * 1.5 if sim.house_state != Sim.PARKED else 0.0
 	var shake := sin(stop_left * 1.3) * maxi(stop_left - STOP_LIFE + SHUDDER, 0) * 0.3
-	house.position = Vector2(at - 60 + shake, Sim.ROAD * B - 520 + bump)
-	window.position = Vector2(at + 2.9 * B + shake, (Sim.ROAD - 3.55) * B + bump)
+	house.position = Vector2(at - 60 + shake, sim.house_y * B - 520 + bump)
+	window.position = Vector2(at + 2.9 * B + shake, (sim.house_y - 3.55) * B + bump)
 	for i in wheels.size():
-		wheels[i].position = Vector2(at + Sim.WHEELS[i] * B + shake, (Sim.ROAD - 1.02) * B)
+		wheels[i].position = Vector2(at + Sim.WHEELS[i] * B + shake, (sim.house_y - 1.02) * B)
 		wheels[i].rotation = sim.house_x / 1.02
 	_sync_hints(marta_cues, sim.marta, marta_keys)
 	_sync_hints(giulio_cues, sim.giulio, giulio_keys)
@@ -278,8 +338,8 @@ func _sync_hints(c: Cues, k: Sim.Kid, keys: Dictionary) -> void:
 	var drive := sim.near_house(k) and not bell and sim.house_state == Sim.PARKED and not sim.done
 	c.bell.visible = bell
 	c.drive.visible = drive
-	c.drive.position = Vector2(at + 5.9 * B, (Sim.ROAD - 6.2) * B)
-	c.bell.position = Vector2(at + Sim.BELL * B, (Sim.ROAD - 5.6) * B)
+	c.drive.position = Vector2(at + 5.9 * B, (sim.house_y - 6.2) * B)
+	c.bell.position = Vector2(at + Sim.BELL * B, (sim.house_y - 5.6) * B)
 	var bubble := c.bell if bell else c.drive
 	_cue(c.interact, bell or drive, keys.interact, bubble.position + Vector2(66, 0))
 

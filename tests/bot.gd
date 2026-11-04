@@ -10,8 +10,10 @@ func _init(world: Sim) -> void:
 	sim = world
 
 
-## She walks up to the rock on the road and floats it away.
+## She walks up to the rock on the road and floats it away, if the stop has one.
 func clear_road() -> void:
+	if road_rock() == null:
+		return
 	walk(sim.marta, road_rock().pos.x - 0.6)
 	press(sim.marta, "use_p")
 	run(120)
