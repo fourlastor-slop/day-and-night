@@ -252,7 +252,8 @@ NumPy and SciPy.
 
 ## Technical shape
 
-- Godot 4.7, GDScript. No server: one save file in `user://`.
+- Godot 4.7, GDScript. No server: one save file in `user://`, which holds the stop in play exactly, so a game picked
+  up later carries on mid-stop.
 - One world, simulated once, with two cameras on it. The night view adds the blue tone.
 - One tile grid per land. Water, heat, cold and stress are simple grid rules.
 - Paint is one colour stored on each object, so it never touches the tile grid.

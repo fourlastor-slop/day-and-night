@@ -258,3 +258,6 @@ const TUNNEL := {
 
 ## The stops built so far, in the order the road meets them.
 const ROAD := [BROOK, GULLY, RIVER, CLIFF, MOUTH, RAILS, HALL, TUNNEL]
+
+## The lands the road crosses, with how many of its stops each one holds, in order.
+const LANDS := [["The Meadow", 4], ["The Old Mines", 4]]

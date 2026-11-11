@@ -1439,3 +1439,119 @@ func _darkest_near(at: Vector2) -> Vector2:
 				least = light_at(c.x, c.y)
 				best = _centre(c)
 	return best
+
+
+# ---- saving ---------------------------------------------------------------------------------
+
+
+## Everything about a stop in play that its map doesn't already say, so the kids can pick up exactly
+## where they left off.
+func to_save() -> Dictionary:
+	var held := []
+	if giulio.rope != null:
+		held = [ropes.find(giulio.rope), _rope_save(giulio.rope)]
+	return {
+		"t": t,
+		"cells": cells,
+		"ice": ice,
+		"span": span,
+		"paint": paint,
+		"paint_dir": paint_dir,
+		"strain": strain,
+		"dirty": _dirty,
+		"done": done,
+		"house": [house_x, house_y, house_safe, house_state],
+		"rocks": rocks.map(func(r: Rock) -> Array: return [r.pos, r.colour, r.vx, r.vy]),
+		"kids": [marta, giulio].map(_kid_save),
+		"ropes": ropes.map(_rope_save),
+		"held": held,
+		"bodies": bodies.map(_body_save),
+		"soots": soots.map(func(s: Soot) -> Vector2: return s.pos),
+	}
+
+
+## Puts a saved stop back. The Sim has to have been made from the same stop's map.
+func restore(s: Dictionary) -> void:
+	t = s.t
+	cells = s.cells
+	ice = s.ice
+	span = s.span
+	paint = s.paint.duplicate()
+	paint_dir = s.paint_dir.duplicate()
+	strain = s.strain.duplicate()
+	_dirty = s.dirty
+	done = s.done
+	house_x = s.house[0]
+	house_y = s.house[1]
+	house_safe = s.house[2]
+	house_state = s.house[3]
+	for i in rocks.size():
+		var d: Array = s.rocks[i]
+		rocks[i].pos = d[0]
+		rocks[i].colour = d[1]
+		rocks[i].vx = d[2]
+		rocks[i].vy = d[3]
+	for i in 2:
+		var k: Kid = [marta, giulio][i]
+		var d: Array = s.kids[i]
+		k.pos = d[0]
+		k.vel = d[1]
+		k.facing = d[2]
+		k.grounded = d[3]
+		k.coyote = d[4]
+		k.buffer = d[5]
+		k.colour = d[6]
+		k.tool = d[7]
+		k.aim = d[8]
+	ropes.clear()
+	for d: Array in s.ropes:
+		ropes.append(_rope_load(d))
+	giulio.rope = null
+	if not s.held.is_empty():
+		giulio.rope = ropes[s.held[0]] if s.held[0] >= 0 else _rope_load(s.held[1])
+	bodies.clear()
+	for d: Array in s.bodies:
+		var b := Body.new()
+		b.cells.assign(d[0])
+		b.paint = d[1].duplicate()
+		b.kinds = d[2].duplicate()
+		b.dirs = d[3].duplicate()
+		b.pos = d[4]
+		b.size = d[5]
+		b.house = d[6]
+		b.cart = d[7]
+		b.dir = d[8]
+		b.vy = d[9]
+		for e: Array in d[10]:
+			b.ends.append([ropes[e[0]], e[1], e[2]])
+		bodies.append(b)
+	for i in soots.size():
+		soots[i].pos = s.soots[i]
+	# The light is worked out from all of the above, and the sootlings read it before the next tick does.
+	_light_key = 0
+	_light()
+
+
+func _kid_save(k: Kid) -> Array:
+	return [k.pos, k.vel, k.facing, k.grounded, k.coyote, k.buffer, k.colour, k.tool, k.aim]
+
+
+func _rope_save(r: Rope) -> Array:
+	return [r.a, r.b, r.a_block, r.b_block, r.hook, r.rest, r.tied]
+
+
+func _rope_load(d: Array) -> Rope:
+	var r := Rope.new()
+	r.a = d[0]
+	r.b = d[1]
+	r.a_block = d[2]
+	r.b_block = d[3]
+	r.hook = d[4]
+	r.rest = d[5]
+	r.tied = d[6]
+	return r
+
+
+func _body_save(b: Body) -> Array:
+	var ends := b.ends.map(func(e: Array) -> Array: return [ropes.find(e[0]), e[1], e[2]])
+	return [b.cells, b.paint, b.kinds, b.dirs, b.pos, b.size, b.house, b.cart, b.dir, b.vy, ends]

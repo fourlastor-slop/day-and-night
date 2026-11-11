@@ -1,0 +1,76 @@
+name: Publish to itch.io
+on:
+  push:
+    branches: [ main ]
+
+# a newer push takes over from a build still running
+concurrency:
+  group: publish
+  cancel-in-progress: true
+
+env:
+  ITCH_PROJECT: 'fourlastor/day-and-night'
+  # rcodesign, the Mac build's signer. Not named RCODESIGN_...: it reads such variables as its own settings
+  SIGNER_VERSION: '0.29.0'
+  SIGNER_SHA256: 'dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002'
+
+jobs:
+  export:
+    name: Export and publish
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Setup Godot
+        uses: ./.github/actions/setup-godot
+
+      # ---- what a build can reuse from the one before
+      - name: Cache rcodesign
+        id: cache-rcodesign
+        uses: actions/cache@v6
+        with:
+          path: apple-codesign-${{ env.SIGNER_VERSION }}-x86_64-unknown-linux-musl
+          key: rcodesign-${{ env.SIGNER_VERSION }}
+      - name: Cache .godot
+        uses: actions/cache@v6
+        with:
+          path: .godot
+          key: dot-godot-${{ hashFiles('**/*.import', 'project.godot') }}
+          restore-keys: |
+            dot-godot-
+
+      # the Mac build's signer (tools/export.sh)
+      - name: Download rcodesign
+        if: steps.cache-rcodesign.outputs.cache-hit != 'true'
+        run: |
+          name="apple-codesign-${SIGNER_VERSION}-x86_64-unknown-linux-musl"
+          curl -sSfLO "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F${SIGNER_VERSION}/${name}.tar.gz"
+          echo "${SIGNER_SHA256}  ${name}.tar.gz" | sha256sum -c -
+          tar -xzf "${name}.tar.gz"
+          rm "${name}.tar.gz"
+
+      # ---- the builds
+      - name: Import resources
+        run: ./Godot_v${GODOT_VERSION}-${RELEASE_NAME}_mono_linux_x86_64/Godot_v${GODOT_VERSION}-${RELEASE_NAME}_mono_linux.x86_64 --quiet --headless --path . --import
+      # every stop played by the bots, the real game driven by keys, and every Italian line: a
+      # build that can't get through that doesn't reach the page
+      - name: Check
+        run: tools/check.sh
+      - name: Linux Build
+        run: tools/export.sh linux
+      - name: Windows Build
+        run: tools/export.sh windows
+      - name: Mac Build
+        run: tools/export.sh macos
+
+      # ---- to the page
+      - uses: jdno/setup-butler@v2.0.0
+      - name: Deploy 🚀
+        run: |
+          version="$(git rev-parse --short HEAD)"
+          butler push build/linux "$ITCH_PROJECT:linux" --userversion "$version"
+          butler push build/windows "$ITCH_PROJECT:windows" --userversion "$version"
+          # the zip itself: butler unpacks it, so the page gets the app
+          butler push build/macos/DayAndNight.zip "$ITCH_PROJECT:mac" --userversion "$version"
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}

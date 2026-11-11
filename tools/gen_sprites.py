@@ -318,10 +318,33 @@ def aim_arrows(p):
 
 
 def banner(p):
-    p.shape(rbox(16, 14, 404, 266, 14), '#f3ecdd', line=.6, shadow=.4, rim=.2, painted=True, hatch=1)
-    house(p, 1.95, 5.15, u=22, wheels=True)
-    for x, y, r in ((60, 60, 16), (360, 70, 20), (340, 190, 12), (84, 196, 12)):
+    """The card a finished stop shows: the stop's name goes in the band above the house, and the key to go on below it."""
+    p.shape(rbox(16, 14, 504, 426, 16), '#f3ecdd', line=.6, shadow=.4, rim=.2, painted=True, hatch=1)
+    house(p, 3.35, 6.85, u=22, wheels=True)
+    for x, y, r in ((70, 150, 16), (450, 160, 20), (440, 300, 12), (84, 300, 12)):
         sparkle(p, x, y, r, YELLOW)
+
+
+def menu_card(p):
+    """The menus' paper, stretched as a nine-patch: its edges keep their size and only the middle grows."""
+    p.shape(rbox(14, 12, 286, 286, 20), '#f3ecdd', line=.6, shadow=.4, rim=.2, painted=True, hatch=1)
+
+
+def menu_pick(p):
+    """A stroke of yellow behind the chosen line of a menu, stretched sideways to fit it."""
+    p.shape(rbox(10, 10, 350, 90, 34), '#f2d27c', line=.35, lw=1.2, shadow=.15, rim=.2, amp=.8, painted=True, hatch=2)
+
+
+def icon(p):
+    """The house between day and night, for the window, the taskbar and the exported games."""
+    p.shape(rbox(8, 8, 248, 248, 40), '#bfd9e0', line=0, shadow=0, rim=0, amp=0, painted=True)
+    p.shape(np.array([(8.0, 150.0), (248.0, 150.0), (248.0, 208.0), (238.0, 238.0), (208.0, 248.0), (48.0, 248.0), (18.0, 238.0),
+                      (8.0, 208.0)]), '#31427c', line=0, shadow=0, rim=0, amp=0, painted=True)
+    p.line(rbox(8, 8, 248, 248, 40), INK, w=4, a=.8, closed=True, amp=.5, painted=True)
+    p.shape(ell(52, 52, 26, 26, 24), '#f3c95a', line=.5, shadow=.2, rim=.2, painted=True, step=7)
+    for x, y in ((26, 176), (232, 172), (226, 230), (32, 228)):
+        sparkle(p, x, y, 6, '#eef1f8')
+    house(p, .885, 4.83, u=19, wheels=True)
 
 
 def main():
@@ -377,7 +400,10 @@ def main():
     write('strip_aim', cutout(104, 100, strip_aim))
     write('aim_arrows', cutout(140, 140, aim_arrows))
     write('crane', cutout(int(11.8 * U), int(3.9 * U), crane))
-    write('banner', cutout(420, 280, banner))
+    write('banner', cutout(520, 440, banner))
+    write('menu_card', cutout(300, 300, menu_card))
+    write('menu_pick', cutout(360, 100, menu_pick))
+    write('icon', cutout(256, 256, icon))
 
 
 if __name__ == '__main__':

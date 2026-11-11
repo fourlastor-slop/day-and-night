@@ -1,0 +1,143 @@
+msgid ""
+msgstr ""
+"Language: it\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8-bit\n"
+
+# ---- the title
+
+msgid "Day & Night"
+msgstr "Giorno & Notte"
+
+msgid "They have never been awake at the same time."
+msgstr "Non sono mai stati svegli nello stesso momento."
+
+# ---- the menus
+
+msgid "Play"
+msgstr "Gioca"
+
+msgid "Continue"
+msgstr "Continua"
+
+msgid "Stops"
+msgstr "Tappe"
+
+msgid "Controls"
+msgstr "Comandi"
+
+msgid "Options"
+msgstr "Opzioni"
+
+msgid "New journey"
+msgstr "Nuovo viaggio"
+
+msgid "Quit"
+msgstr "Esci"
+
+msgid "Restart this stop"
+msgstr "Ricomincia la tappa"
+
+msgid "Back"
+msgstr "Indietro"
+
+msgid "Language"
+msgstr "Lingua"
+
+msgid "Fullscreen"
+msgstr "Schermo intero"
+
+msgid "On"
+msgstr "Sì"
+
+msgid "Off"
+msgstr "No"
+
+msgid "Start the journey again from the first stop?"
+msgstr "Ricominciare il viaggio dalla prima tappa?"
+
+msgid "The stops you have reached will be locked again."
+msgstr "Le tappe raggiunte si chiuderanno di nuovo."
+
+msgid "No"
+msgstr "No"
+
+msgid "Yes, start again"
+msgstr "Sì, ricomincia"
+
+# ---- the controls
+
+msgid "Move"
+msgstr "Muoviti"
+
+msgid "Jump"
+msgstr "Salta"
+
+msgid "Paint, or use a tool"
+msgstr "Dipingi, o usa un attrezzo"
+
+msgid "Wash, or aim"
+msgstr "Lava, o prendi la mira"
+
+msgid "Next colour or tool"
+msgstr "Cambia colore o attrezzo"
+
+msgid "Drive the house, ring its bell"
+msgstr "Guida la casa, suona la campana"
+
+msgid "Pause"
+msgstr "Pausa"
+
+msgid "Left  Right"
+msgstr "Sinistra  Destra"
+
+msgid "Up"
+msgstr "Su"
+
+msgid "Stick or D-pad"
+msgstr "Levetta o croce"
+
+msgid "Gamepad"
+msgstr "Controller"
+
+# ---- the road
+
+msgid "Stop %d"
+msgstr "Tappa %d"
+
+msgid "Press Enter to go on"
+msgstr "Premi Invio per proseguire"
+
+msgid "Press A or Enter to go on"
+msgstr "Premi A o Invio per proseguire"
+
+msgid "The Meadow"
+msgstr "Il Prato"
+
+msgid "The Old Mines"
+msgstr "Le Vecchie Miniere"
+
+msgid "The Brook"
+msgstr "Il Ruscello"
+
+msgid "The Gully"
+msgstr "La Gola"
+
+msgid "The River"
+msgstr "Il Fiume"
+
+msgid "The Cliff Lift"
+msgstr "L'Ascensore della Scogliera"
+
+msgid "The Mine Mouth"
+msgstr "L'Ingresso della Miniera"
+
+msgid "The Old Rails"
+msgstr "I Vecchi Binari"
+
+msgid "The Sootling Hall"
+msgstr "La Sala dei Fuligginelli"
+
+msgid "The Long Tunnel"
+msgstr "La Lunga Galleria"

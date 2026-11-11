@@ -14,6 +14,10 @@ config/name="Day & Night"
 config/description="They have never been awake at the same time."
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
+boot_splash/bg_color=Color(0.953, 0.925, 0.867, 1)
+boot_splash/image="res://assets/gfx/splash.png"
+boot_splash/minimum_display_time=1500
+config/icon="res://assets/gfx/icon.png"
 
 [audio]
 
@@ -28,6 +32,10 @@ window/size/window_height_override=720
 window/stretch/mode="viewport"
 window/stretch/aspect="keep"
 
+[internationalization]
+
+locale/translations=PackedStringArray("res://data/lang/it.po")
+
 [physics]
 
 common/physics_ticks_per_second=60
@@ -38,3 +46,4 @@ common/max_physics_steps_per_frame=2
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 environment/defaults/default_clear_color=Color(0.953, 0.925, 0.867, 1)
+textures/vram_compression/import_etc2_astc=true
