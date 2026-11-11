@@ -63,6 +63,16 @@ if [ "$platform" = macos ]; then
 	unzip -q "$OUT/$file" -d "$OUT/app"
 	rm "$OUT/$file"
 	for app in "$OUT"/app/*.app; do
+		# Godot writes the executable's name into Info.plist without escaping it, so the "&" in
+		# "Day & Night" leaves the plist broken. Escape any bare "&" before signing.
+		sed -i -E 's/&([^#a-zA-Z]|$)/\&amp;\1/g' "$app/Contents/Info.plist"
+		# and the other way round in the app's names for Finder, which aren't XML: it writes
+		# "Giorno &amp; Notte" there.
+		for names in "$app"/Contents/Resources/*.lproj/InfoPlist.strings; do
+			if [ -f "$names" ]; then
+				sed -i 's/&amp;/\&/g' "$names"
+			fi
+		done
 		"$rcodesign" sign "$app"
 	done
 	mv "$OUT/licenses" "$OUT/app/"
